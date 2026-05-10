@@ -4,6 +4,7 @@ import datetime
 import calendar
 import subprocess
 import os
+import sys
 
 st.set_page_config(
     page_title="Readvibe 🌿",
@@ -15,13 +16,15 @@ st.set_page_config(
 @st.cache_resource
 def start_bot():
     try:
-        # We use Popen so it runs as a separate background process
-        subprocess.Popen(["python", "bot.py"])
+        # Use sys.executable to ensure we use the same python version
+        subprocess.Popen([sys.executable, "bot.py"])
         return True
     except Exception as e:
         return f"Error starting bot: {e}"
 
 bot_status = start_bot()
+if bot_status is not True:
+    st.error(f"Bot failed to start: {bot_status}")
 
 # Custom CSS for "calm-tone" cards and Habit Calendar
 st.markdown("""
