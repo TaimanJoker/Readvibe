@@ -1,11 +1,12 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
 MONGODB_URI = os.getenv("MONGODB_URI")
+TZ_OFFSET = int(os.getenv("TIMEZONE_OFFSET", 0))
 DB_NAME = "readvibe"
 COLLECTION_NAME = "highlights"
 
@@ -16,6 +17,9 @@ def get_collection():
     db = client[DB_NAME]
     return db[COLLECTION_NAME]
 
+def get_local_now():
+    return datetime.utcnow() + timedelta(hours=TZ_OFFSET)
+
 def save_highlight(content, title=None, author=None, tags=None):
     collection = get_collection()
     highlight = {
@@ -23,7 +27,7 @@ def save_highlight(content, title=None, author=None, tags=None):
         "title": title or "Untitled",
         "author": author or "Unknown",
         "tags": tags or [],
-        "created_at": datetime.utcnow()
+        "created_at": get_local_now()
     }
     return collection.insert_one(highlight)
 

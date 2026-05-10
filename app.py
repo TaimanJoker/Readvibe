@@ -1,5 +1,5 @@
 import streamlit as st
-from database import get_highlights, get_activity_dates
+from database import get_highlights, get_activity_dates, get_local_now
 import datetime
 import calendar
 import subprocess
@@ -146,7 +146,8 @@ st.write("Your calm space for highlights and thoughts.")
 
 # --- Habit Calendar Section ---
 activity = get_activity_dates()
-today = datetime.date.today()
+local_now = get_local_now()
+today = local_now.date()
 curr_month = today.month
 curr_year = today.year
 
