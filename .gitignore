@@ -1,0 +1,21 @@
+# Security: Hide credentials and personal keys
+.env
+*.env
+tk.env
+
+# Project Tracking (as requested)
+GEMINI.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/config.toml
