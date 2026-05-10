@@ -18,4 +18,4 @@ env/
 Thumbs.db
 
 # Streamlit
-.streamlit/config.toml
+# (Allowing config.toml so the light theme works on deployment)

@@ -2,12 +2,26 @@ import streamlit as st
 from database import get_highlights, get_activity_dates
 import datetime
 import calendar
+import subprocess
+import os
 
 st.set_page_config(
     page_title="Readvibe 🌿",
     page_icon="🌿",
     layout="centered"
 )
+
+# Launch Bot in background if not already running (Deployment Hack)
+@st.cache_resource
+def start_bot():
+    try:
+        # We use Popen so it runs as a separate background process
+        subprocess.Popen(["python", "bot.py"])
+        return True
+    except Exception as e:
+        return f"Error starting bot: {e}"
+
+bot_status = start_bot()
 
 # Custom CSS for "calm-tone" cards and Habit Calendar
 st.markdown("""
