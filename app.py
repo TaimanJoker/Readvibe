@@ -1,6 +1,7 @@
 import streamlit as st
-from database import get_highlights, get_activity_dates, get_local_now
+from database import get_highlights, get_activity_dates, get_secret, TZ_OFFSET
 import datetime
+from datetime import timedelta, timezone
 import calendar
 import subprocess
 import os
@@ -12,12 +13,21 @@ st.set_page_config(
     layout="centered"
 )
 
+# Helper to get current local time
+def get_local_now():
+    return datetime.datetime.now(timezone.utc) + timedelta(hours=TZ_OFFSET)
+
 # Launch Bot in background if not already running (Deployment Hack)
 @st.cache_resource
 def start_bot():
     try:
-        # Use sys.executable to ensure we use the same python version
-        subprocess.Popen([sys.executable, "bot.py"])
+        # We pass secrets as env vars to the bot process
+        env = os.environ.copy()
+        env["MONGODB_URI"] = get_secret("MONGODB_URI")
+        env["TELEGRAM_BOT_TOKEN"] = get_secret("TELEGRAM_BOT_TOKEN")
+        env["TIMEZONE_OFFSET"] = str(TZ_OFFSET)
+        
+        subprocess.Popen([sys.executable, "bot.py"], env=env)
         return True
     except Exception as e:
         return f"Error starting bot: {e}"
@@ -265,13 +275,16 @@ try:
                             ''.join([f'<span class="tag">#{t}</span>' for t in h['tags']]) + \
                             '</div>'
             
+            # Adjust time for display
+            display_time = h['created_at'] + timedelta(hours=TZ_OFFSET)
+            
             with st.container():
                 st.markdown(f"""
                 <div class="highlight-card">
                     <div class="highlight-content">"{h['content']}"</div>
                     <div class="highlight-meta">
                         <span class="highlight-title">{h['title']}</span> by {h['author']} 
-                        • {h['created_at'].strftime('%Y-%m-%d %H:%M')}
+                        • {display_time.strftime('%Y-%m-%d %H:%M')}
                     </div>
                     {tags_html}
                 </div>

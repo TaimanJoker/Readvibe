@@ -3,14 +3,17 @@ from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# Helper to get secrets from st.secrets or os.getenv
+load_dotenv()
+
 def get_secret(key, default=None):
+    # Try Streamlit secrets first (for Cloud)
     try:
         import streamlit as st
         if key in st.secrets:
             return st.secrets[key]
-    except ImportError:
+    except:
         pass
+    # Fallback to Environment Variables (for Local)
     return os.getenv(key, default)
 
 MONGODB_URI = get_secret("MONGODB_URI")
@@ -20,15 +23,10 @@ COLLECTION_NAME = "highlights"
 
 def get_collection():
     if not MONGODB_URI:
-        raise ValueError("MONGODB_URI not found in environment variables or secrets")
+        raise ValueError("MONGODB_URI not found")
     client = MongoClient(MONGODB_URI)
     db = client[DB_NAME]
     return db[COLLECTION_NAME]
-
-def get_local_now():
-    # Use timezone-aware UTC now
-    return datetime.now(timezone.utc) + timedelta(hours=TZ_OFFSET)
-
 
 def save_highlight(content, title=None, author=None, tags=None):
     collection = get_collection()
@@ -37,7 +35,7 @@ def save_highlight(content, title=None, author=None, tags=None):
         "title": title or "Untitled",
         "author": author or "Unknown",
         "tags": tags or [],
-        "created_at": get_local_now()
+        "created_at": datetime.now(timezone.utc) # Store real UTC
     }
     return collection.insert_one(highlight)
 
@@ -57,18 +55,21 @@ def get_highlights(search_query=None):
 
 def get_activity_dates():
     collection = get_collection()
-    # Return dates (YYYY-MM-DD) where highlights were saved
+    # Apply offset inside the MongoDB aggregation
     pipeline = [
         {
             "$project": {
-                "date": {
-                    "$dateToString": { "format": "%Y-%m-%d", "date": "$created_at" }
+                "local_date": {
+                    "$dateToString": { 
+                        "format": "%Y-%m-%d", 
+                        "date": { "$add": ["$created_at", TZ_OFFSET * 3600000] } 
+                    }
                 }
             }
         },
         {
             "$group": {
-                "_id": "$date",
+                "_id": "$local_date",
                 "count": { "$sum": 1 }
             }
         }
