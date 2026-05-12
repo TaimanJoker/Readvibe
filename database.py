@@ -1,24 +1,34 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-load_dotenv()
+# Helper to get secrets from st.secrets or os.getenv
+def get_secret(key, default=None):
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return st.secrets[key]
+    except ImportError:
+        pass
+    return os.getenv(key, default)
 
-MONGODB_URI = os.getenv("MONGODB_URI")
-TZ_OFFSET = int(os.getenv("TIMEZONE_OFFSET", 0))
+MONGODB_URI = get_secret("MONGODB_URI")
+TZ_OFFSET = int(get_secret("TIMEZONE_OFFSET", 0))
 DB_NAME = "readvibe"
 COLLECTION_NAME = "highlights"
 
 def get_collection():
     if not MONGODB_URI:
-        raise ValueError("MONGODB_URI not found in environment variables")
+        raise ValueError("MONGODB_URI not found in environment variables or secrets")
     client = MongoClient(MONGODB_URI)
     db = client[DB_NAME]
     return db[COLLECTION_NAME]
 
 def get_local_now():
-    return datetime.utcnow() + timedelta(hours=TZ_OFFSET)
+    # Use timezone-aware UTC now
+    return datetime.now(timezone.utc) + timedelta(hours=TZ_OFFSET)
+
 
 def save_highlight(content, title=None, author=None, tags=None):
     collection = get_collection()

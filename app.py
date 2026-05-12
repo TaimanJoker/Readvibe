@@ -148,11 +148,40 @@ st.write("Your calm space for highlights and thoughts.")
 activity = get_activity_dates()
 local_now = get_local_now()
 today = local_now.date()
-curr_month = today.month
-curr_year = today.year
+
+# Initialize session state for calendar navigation
+if 'cal_month' not in st.session_state:
+    st.session_state.cal_month = today.month
+if 'cal_year' not in st.session_state:
+    st.session_state.cal_year = today.year
+
+# Calendar Navigation Buttons
+col1, col2, col3 = st.columns([1, 3, 1])
+
+if col1.button("←", use_container_width=True):
+    st.session_state.cal_month -= 1
+    if st.session_state.cal_month == 0:
+        st.session_state.cal_month = 12
+        st.session_state.cal_year -= 1
+    st.rerun()
+
+if col2.button("Today 🌿", use_container_width=True):
+    st.session_state.cal_month = today.month
+    st.session_state.cal_year = today.year
+    st.rerun()
+
+if col3.button("→", use_container_width=True):
+    st.session_state.cal_month += 1
+    if st.session_state.cal_month == 13:
+        st.session_state.cal_month = 1
+        st.session_state.cal_year += 1
+    st.rerun()
+
+view_month = st.session_state.cal_month
+view_year = st.session_state.cal_year
 
 # Generate Calendar HTML
-cal = calendar.monthcalendar(curr_year, curr_month)
+cal = calendar.monthcalendar(view_year, view_month)
 days_header = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
 header_html = "".join([f'<div style="font-weight: bold; color: #5c8d89;">{d}</div>' for d in days_header])
@@ -163,14 +192,14 @@ for week in cal:
         if day == 0:
             body_html += '<div></div>'
         else:
-            date_str = f"{curr_year}-{curr_month:02d}-{day:02d}"
+            date_str = f"{view_year}-{view_month:02d}-{day:02d}"
             is_active = date_str in activity
             class_name = "calendar-day day-active" if is_active else "calendar-day"
             body_html += f'<div class="{class_name}">{day}</div>'
 
 st.markdown(f"""
     <div class="calendar-container">
-        <div class="calendar-header">{calendar.month_name[curr_month]} {curr_year}</div>
+        <div class="calendar-header">{calendar.month_name[view_month]} {view_year}</div>
         <div class="calendar-grid">
             {header_html}
             {body_html}

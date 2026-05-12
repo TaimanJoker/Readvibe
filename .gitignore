@@ -19,3 +19,6 @@ Thumbs.db
 
 # Streamlit
 # (Allowing config.toml so the light theme works on deployment)
+
+# mock data
+mock_data.json

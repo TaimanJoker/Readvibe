@@ -28,14 +28,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Extract hashtags
     import re
     tags = re.findall(r'#(\w+)', text)
-    # Remove hashtags from the content if you want it clean, 
-    # but for now we'll keep the text as is and just save the tags separately.
+    # Remove hashtags from the content for a cleaner look
+    content_clean = re.sub(r'#\w+', '', text).strip()
     
-    lines = text.split('\n')
+    lines = content_clean.split('\n')
     
     title = "Untitled"
     author = "Unknown"
-    content = text
+    content = content_clean
 
     # Simple heuristic parser
     if len(lines) > 1 and '|' in lines[0]:
