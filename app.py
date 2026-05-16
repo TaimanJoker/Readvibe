@@ -1,5 +1,9 @@
 import streamlit as st
-from database import get_highlights, get_activity_dates, get_secret, TZ_OFFSET
+from database import (
+    get_secret, TZ_OFFSET, get_user_by_google_id, create_user, 
+    get_user_by_username, save_quote, quote_exists, init_db,
+    get_quotes, get_user_activity_dates, log_interaction, get_user_quotes
+)
 import datetime
 from datetime import timedelta, timezone
 import calendar
@@ -7,11 +11,118 @@ import subprocess
 import os
 import sys
 
+# Initialize Database Indexes
+init_db()
+
 st.set_page_config(
     page_title="Readvibe 🌿",
     page_icon="🌿",
     layout="centered"
 )
+
+# --- Authentication Logic (Google OAuth Placeholder) ---
+# Note: In a real deployment, you would use streamlit-google-auth or similar.
+# For now, we will use a session state mock to develop the flow.
+
+if 'user' not in st.session_state:
+    st.session_state.user = None
+
+def login():
+    st.title("Welcome to Readvibe 🌿")
+    st.write("Please sign in to continue to the community.")
+    
+    # Mock Google Login for development
+    # In production, this would be the OAuth flow
+    if st.button("Sign in with Google"):
+        # This info would come from the Google ID Token
+        mock_user_info = {
+            "google_id": "mock_google_123",
+            "email": "user@example.com",
+            "profile_pic": "https://via.placeholder.com/150"
+        }
+        
+        user = get_user_by_google_id(mock_user_info["google_id"])
+        if user:
+            st.session_state.user = user
+        else:
+            st.session_state.user = mock_user_info # Temp storage for onboarding
+        st.rerun()
+
+def onboarding():
+    st.title("Join the Community 🌿")
+    st.write("Almost there! Choose your unique username and contribute your first quote.")
+    
+    with st.form("onboarding_form"):
+        username = st.text_input("Choose a Username", help="This must be unique and will be used on your profile.")
+        st.divider()
+        st.write("### Contribute your first unique quote")
+        content = st.text_area("The Quote", max_chars=300)
+        col1, col2 = st.columns(2)
+        title = col1.text_input("Source Title (Book/Movie/Show)")
+        author = col2.text_input("Author/Person")
+        tags = st.text_input("Tags (comma separated)")
+        
+        submit = st.form_submit_button("Complete Registration")
+        
+from ai_agent import verify_quote_with_ai
+
+# ... (inside onboarding function) ...
+        if submit:
+            if not username:
+                st.error("Username is required.")
+            elif get_user_by_username(username):
+                st.error("This username is already taken. Please choose another.")
+            elif not content:
+                st.error("You must contribute a quote to join.")
+            elif quote_exists(content):
+                st.error("This quote already exists in our community! Please share a novel one.")
+            else:
+                with st.spinner("Verifying quote with AI..."):
+                    ai_result = verify_quote_with_ai(content, title, author)
+                
+                if not ai_result["verified"]:
+                    st.error(f"Verification Failed: {ai_result['reason']}")
+                else:
+                    # 1. Create User
+                    user_res = create_user(
+                        st.session_state.user["google_id"],
+                        username,
+                        st.session_state.user["email"],
+                        st.session_state.user["profile_pic"]
+                    )
+                    user_id = user_res.inserted_id
+                    
+                    # 2. Save First Quote (using AI corrected data)
+                    save_quote(
+                        content, 
+                        ai_result["title"], 
+                        ai_result["author"], 
+                        user_id, 
+                        [t.strip() for t in tags.split(',')] if tags else []
+                    )
+                    
+                    # 3. Finalize Login
+                    st.session_state.user = get_user_by_google_id(st.session_state.user["google_id"])
+                    st.success("Welcome aboard! 🎉")
+                    st.rerun()
+
+if st.session_state.user is None:
+    login()
+    st.stop()
+
+if "_id" not in st.session_state.user:
+    onboarding()
+    st.stop()
+
+# --- Authenticated App UI ---
+user_data = st.session_state.user
+
+# Sidebar Navigation
+page = st.sidebar.radio("Navigation", ["Feed", "My Profile"])
+
+if st.sidebar.button("Logout"):
+    st.session_state.user = None
+    st.rerun()
 
 # Helper to get current local time
 def get_local_now():
@@ -32,9 +143,7 @@ def start_bot():
     except Exception as e:
         return f"Error starting bot: {e}"
 
-bot_status = start_bot()
-if bot_status is not True:
-    st.error(f"Bot failed to start: {bot_status}")
+start_bot()
 
 # Custom CSS for "calm-tone" cards and Habit Calendar
 st.markdown("""
@@ -151,145 +260,159 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("Readvibe 🌿")
-st.write("Your calm space for highlights and thoughts.")
+# --- Page Rendering ---
 
-# --- Habit Calendar Section ---
-activity = get_activity_dates()
-local_now = get_local_now()
-today = local_now.date()
-
-# Initialize session state for calendar navigation
-if 'cal_month' not in st.session_state:
-    st.session_state.cal_month = today.month
-if 'cal_year' not in st.session_state:
-    st.session_state.cal_year = today.year
-
-# Calendar Navigation Buttons
-col1, col2, col3 = st.columns([1, 3, 1])
-
-if col1.button("←", use_container_width=True):
-    st.session_state.cal_month -= 1
-    if st.session_state.cal_month == 0:
-        st.session_state.cal_month = 12
-        st.session_state.cal_year -= 1
-    st.rerun()
-
-if col2.button("Today 🌿", use_container_width=True):
-    st.session_state.cal_month = today.month
-    st.session_state.cal_year = today.year
-    st.rerun()
-
-if col3.button("→", use_container_width=True):
-    st.session_state.cal_month += 1
-    if st.session_state.cal_month == 13:
-        st.session_state.cal_month = 1
-        st.session_state.cal_year += 1
-    st.rerun()
-
-view_month = st.session_state.cal_month
-view_year = st.session_state.cal_year
-
-# Generate Calendar HTML
-cal = calendar.monthcalendar(view_year, view_month)
-days_header = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
-
-header_html = "".join([f'<div style="font-weight: bold; color: #5c8d89;">{d}</div>' for d in days_header])
-
-body_html = ""
-for week in cal:
-    for day in week:
-        if day == 0:
-            body_html += '<div></div>'
-        else:
-            date_str = f"{view_year}-{view_month:02d}-{day:02d}"
-            is_active = date_str in activity
-            class_name = "calendar-day day-active" if is_active else "calendar-day"
-            body_html += f'<div class="{class_name}">{day}</div>'
-
-st.markdown(f"""
-    <div class="calendar-container">
-        <div class="calendar-header">{calendar.month_name[view_month]} {view_year}</div>
-        <div class="calendar-grid">
-            {header_html}
-            {body_html}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- Quote of the Day Section ---
-from database import get_random_highlight
-featured = get_random_highlight()
-if featured:
-    st.markdown(f"""
-    <div class="featured-card">
-        <div class="featured-badge">Featured Reflection</div>
-        <div class="featured-content">"{featured['content']}"</div>
-        <div style="margin-top: 15px; font-style: italic; color: #8c8c8c;">
-            — {featured['title']} by {featured['author']}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("Your calm space for highlights and thoughts.")
-
-# --- Search & Filter Section ---
-search_query = st.text_input("🔍 Search your highlights...", placeholder="Search by content, author, or #tag")
-
-with st.expander("Add a new highlight manually ✍️"):
-    with st.form("manual_entry"):
-        new_content = st.text_area("Content")
-        col1, col2 = st.columns(2)
-        new_title = col1.text_input("Title", placeholder="e.g. Deep Work")
-        new_author = col2.text_input("Author", placeholder="e.g. Cal Newport")
-        new_tags = st.text_input("Tags (comma separated)", placeholder="e.g. focus, productivity")
-        submit = st.form_submit_button("Save Highlight")
-        
-        if submit:
-            if new_content:
-                from database import save_highlight
-                tags_list = [t.strip() for t in new_tags.split(',')] if new_tags else []
-                save_highlight(new_content, new_title, new_author, tags_list)
-                st.success("Saved! ✨")
-                st.rerun()
-            else:
-                st.warning("Please enter some content.")
-
-if st.button("Refresh 🔄"):
-    st.rerun()
-
-try:
-    highlights = get_highlights(search_query)
+def render_feed():
+    st.title("Community Feed 🌿")
     
-    if not highlights:
-        if search_query:
-            st.info(f"No matches found for '{search_query}'.")
-        else:
-            st.info("No highlights saved yet. Send some to your Telegram bot!")
-    else:
-        for h in highlights:
-            # Prepare tags HTML
-            tags_html = ""
-            if h.get('tags'):
-                tags_html = '<div class="tag-container">' + \
-                            ''.join([f'<span class="tag">#{t}</span>' for t in h['tags']]) + \
-                            '</div>'
+    # --- 1. Submission Section ---
+    with st.expander("✨ Share a New Quote with the Community"):
+        with st.form("new_quote_form"):
+            content = st.text_area("The Quote (Max 300 characters)", max_chars=300)
+            col1, col2 = st.columns(2)
+            title = col1.text_input("Source Title")
+            author = col2.text_input("Author")
+            tags = st.text_input("Tags (comma separated)")
+            submit = st.form_submit_button("Submit to Readvibe")
             
-            # Adjust time for display
-            display_time = h['created_at'] + timedelta(hours=TZ_OFFSET)
-            
-            with st.container():
-                st.markdown(f"""
-                <div class="highlight-card">
-                    <div class="highlight-content">"{h['content']}"</div>
-                    <div class="highlight-meta">
-                        <span class="highlight-title">{h['title']}</span> by {h['author']} 
-                        • {display_time.strftime('%Y-%m-%d %H:%M')}
-                    </div>
-                    {tags_html}
-                </div>
-                """, unsafe_allow_html=True)
+            if submit:
+                if not content:
+                    st.error("Quote content is required.")
+                elif quote_exists(content):
+                    st.error("This quote already exists in our community!")
+                else:
+                    with st.spinner("AI is verifying your quote..."):
+                        ai_result = verify_quote_with_ai(content, title, author)
+                    
+                    if ai_result["verified"]:
+                        save_quote(
+                            content, 
+                            ai_result["title"], 
+                            ai_result["author"], 
+                            user_data["_id"],
+                            [t.strip() for t in tags.split(',')] if tags else []
+                        )
+                        st.success("Verified and added! ✨")
+                        st.rerun()
+                    else:
+                        st.error(f"Rejection: {ai_result['reason']}")
 
-except Exception as e:
-    st.error(f"Could not connect to database: {e}")
-    st.info("Make sure MONGODB_URI is correctly set in your .env file.")
+    st.write("---")
+
+    # --- 2. Habit Calendar (Personal) ---
+    st.write("### Your Consistency")
+    activity = get_user_activity_dates(user_data["_id"])
+    
+    # Navigation Buttons for Calendar
+    if 'feed_month' not in st.session_state:
+        st.session_state.feed_month = datetime.datetime.now(timezone.utc).month
+        st.session_state.feed_year = datetime.datetime.now(timezone.utc).year
+
+    c1, c2, c3 = st.columns([1, 3, 1])
+    if c1.button("←", key="prev"):
+        st.session_state.feed_month -= 1
+        if st.session_state.feed_month == 0:
+            st.session_state.feed_month = 12
+            st.session_state.feed_year -= 1
+        st.rerun()
+    if c2.button("Today 🌿", key="today"):
+        st.session_state.feed_month = datetime.datetime.now(timezone.utc).month
+        st.session_state.feed_year = datetime.datetime.now(timezone.utc).year
+        st.rerun()
+    if c3.button("→", key="next"):
+        st.session_state.feed_month += 1
+        if st.session_state.feed_month == 13:
+            st.session_state.feed_month = 1
+            st.session_state.feed_year += 1
+        st.rerun()
+
+    view_month = st.session_state.feed_month
+    view_year = st.session_state.feed_year
+    cal = calendar.monthcalendar(view_year, view_month)
+    
+    st.markdown(f'<div class="calendar-container">', unsafe_allow_html=True)
+    st.markdown(f'<div class="calendar-header">{calendar.month_name[view_month]} {view_year}</div>', unsafe_allow_html=True)
+    
+    header_html = "".join([f'<div style="font-weight: bold; color: #5c8d89;">{d}</div>' for d in ['M', 'T', 'W', 'T', 'F', 'S', 'S']])
+    body_html = ""
+    for week in cal:
+        for day in week:
+            if day == 0: body_html += '<div></div>'
+            else:
+                date_str = f"{view_year}-{view_month:02d}-{day:02d}"
+                is_active = date_str in activity
+                class_name = "calendar-day day-active" if is_active else "calendar-day"
+                body_html += f'<div class="{class_name}">{day}</div>'
+    
+    st.markdown(f'<div class="calendar-grid">{header_html}{body_html}</div></div>', unsafe_allow_html=True)
+
+    # --- 3. Semantic Featured Quote ---
+    st.write("---")
+    from database import get_recommended_quote
+    featured = get_recommended_quote(user_data["_id"])
+    
+    if featured:
+        st.markdown(f"""
+        <div class="featured-card">
+            <div class="featured-badge">Recommended for You</div>
+            <div class="featured-content">"{featured['content']}"</div>
+            <div style="margin-top: 15px; font-style: italic; color: #8c8c8c;">
+                — {featured['title']} by {featured['author']}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # --- 4. Anonymous Feed ---
+    st.write("### Explore Community")
+    quotes = get_quotes(limit=10) # Random/Recent feed
+    
+    for q in quotes:
+        with st.container():
+            st.markdown(f"""
+            <div class="highlight-card">
+                <div class="highlight-content">"{q['content']}"</div>
+                <div class="highlight-meta">
+                    <span class="highlight-title">{q['title']}</span> by {q['author']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Action Buttons (Up/Down)
+            col1, col2, col3 = st.columns([1, 1, 4])
+            if col1.button("⬆️", key=f"up_{q['_id']}"):
+                log_interaction(user_data["_id"], q["_id"], "upvote")
+                st.rerun()
+            if col2.button("⬇️", key=f"down_{q['_id']}"):
+                log_interaction(user_data["_id"], q["_id"], "downvote")
+                st.rerun()
+
+def render_profile():
+    st.title(f"Profile: @{user_data['username']} 🌿")
+    
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.image(user_data["profile_pic"], width=150)
+    with col2:
+        st.write(f"**Verified Contributions:** {len(get_user_quotes(user_data['_id']))}")
+        st.write(f"**Total Reputation:** ⬆️ {user_data.get('total_upvotes_received', 0)} | ⬇️ {user_data.get('total_downvotes_received', 0)}")
+
+    st.write("---")
+    st.write("### Your Contributions")
+    my_quotes = get_user_quotes(user_data["_id"])
+    for q in my_quotes:
+        st.markdown(f"""
+        <div class="highlight-card">
+            <div class="highlight-content">"{q['content']}"</div>
+            <div class="highlight-meta">
+                <span class="highlight-title">{q['title']}</span> by {q['author']}
+                • {q['created_at'].strftime('%Y-%m-%d')} 
+                • ⬆️ {q.get('upvotes', 0)} ⬇️ {q.get('downvotes', 0)}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# Main Router
+if page == "Feed":
+    render_feed()
+else:
+    render_profile()
