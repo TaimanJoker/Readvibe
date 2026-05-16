@@ -10,6 +10,7 @@ import calendar
 import subprocess
 import os
 import sys
+from ai_agent import verify_quote_with_ai
 
 # Initialize Database Indexes
 init_db()
@@ -64,9 +65,6 @@ def onboarding():
         
         submit = st.form_submit_button("Complete Registration")
         
-from ai_agent import verify_quote_with_ai
-
-# ... (inside onboarding function) ...
         if submit:
             if not username:
                 st.error("Username is required.")
