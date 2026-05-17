@@ -3,7 +3,7 @@ streamlit
 pymongo
 python-telegram-bot
 python-dotenv
-requests
+streamlit-google-oauth
 google-generativeai
 sentence-transformers
 google-auth
