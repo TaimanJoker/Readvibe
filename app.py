@@ -162,28 +162,34 @@ def handle_login():
             "grant_type": "authorization_code"
         }
         with st.spinner("Logging you in..."):
-            response = requests.post(token_url, data=data)
-            if response.status_code == 200:
-                access_token = response.json().get("access_token")
-                # Get user info
-                user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
-                headers = {"Authorization": f"Bearer {access_token}"}
-                user_info_response = requests.get(user_info_url, headers=headers)
-                if user_info_response.status_code == 200:
-                    user_info = user_info_response.json()
-                    # Success!
-                    st.query_params.clear() # Clear code from URL
-                    existing_user = get_user_by_google_id(user_info['id'])
-                    if existing_user:
-                        st.session_state.user = existing_user
+            try:
+                response = requests.post(token_url, data=data, timeout=10)
+                if response.status_code == 200:
+                    access_token = response.json().get("access_token")
+                    user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+                    headers = {"Authorization": f"Bearer {access_token}"}
+                    user_info_response = requests.get(user_info_url, headers=headers, timeout=10)
+                    if user_info_response.status_code == 200:
+                        user_info = user_info_response.json()
+                        st.query_params.clear()
+                        existing_user = get_user_by_google_id(user_info['id'])
+                        if existing_user:
+                            st.session_state.user = existing_user
+                        else:
+                            st.session_state.user = {
+                                "google_id": user_info['id'],
+                                "email": user_info['email'],
+                                "profile_pic": user_info.get('picture', DEFAULT_AVATARS["Panda"]),
+                                "needs_onboarding": True
+                            }
+                        st.rerun()
                     else:
-                        st.session_state.user = {
-                            "google_id": user_info['id'],
-                            "email": user_info['email'],
-                            "profile_pic": user_info.get('picture', DEFAULT_AVATARS["Panda"]),
-                            "needs_onboarding": True
-                        }
-                    st.rerun()
+                        st.error(f"Failed to fetch user info: {user_info_response.text}")
+                else:
+                    st.error(f"Google Token Error: {response.text}")
+                    st.info("Check if your Client Secret and Redirect URI are correct in Streamlit Secrets.")
+            except Exception as e:
+                st.error(f"Login failed: {str(e)}")
 
 def onboarding():
     st.title("Join the Community 🌿")
