@@ -2,67 +2,60 @@ import google.generativeai as genai
 import json
 from database import get_secret
 
-# Setup Gemini
-GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
 def verify_quote_with_ai(content, title, author):
-    if not GEMINI_API_KEY:
-        return {"verified": True, "reason": "AI verification skipped", "title": title, "author": author}
+    api_key = get_secret("GEMINI_API_KEY")
+    if not api_key:
+        return {"verified": True, "reason": "AI verification skipped (No API Key)", "title": title, "author": author}
 
-    # Friendly error message template
+    # Re-configure to ensure the key is active in this process
+    genai.configure(api_key=api_key)
+
     friendly_prefix = "We couldn't verify this quote right now. 🌿"
 
-    # Try specific model strings
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro']
+    # Try the most reliable model names
+    models_to_try = ['gemini-1.5-flash', 'models/gemini-1.5-flash']
 
-    error_details = ""
+    last_error = ""
     for model_name in models_to_try:
         try:
             model = genai.GenerativeModel(model_name)
 
             prompt = f"""
-            You are a verification agent for Readvibe.
-            Task: Verify if this quote is real, find the author/title if missing.
-
+            Task: Verify if this is a real quote and identify the author/title.
             Quote: "{content}"
             Title: "{title}"
             Author: "{author}"
 
-            Rules:
-            - English only.
-            - Length max 300.
-            - Fact-check accuracy.
-
-            Respond ONLY in valid JSON:
-            {{ "verified": bool, "reason": "friendly string", "title": "str", "author": "str" }}
+            Format: Respond ONLY in JSON.
+            {{ "verified": boolean, "reason": "friendly text", "title": "string", "author": "string" }}
             """
 
             response = model.generate_content(prompt)
 
-            if not response or not response.text:
-                error_details = "AI returned an empty response."
-                continue
+            if response and response.text:
+                text = response.text.strip()
+                if "```json" in text:
+                    text = text.split("```json")[1].split("```")[0].strip()
+                elif "```" in text:
+                    text = text.split("```")[1].split("```")[0].strip()
 
-            text = response.text.strip()
-            # Handle potential markdown formatting in response
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
-
-            result = json.loads(text)
-            return result
-
+                result = json.loads(text)
+                return result
         except Exception as e:
-            error_details = str(e)
+            last_error = str(e)
             continue
 
-    # If we reached here, all attempts failed
+    # If we failed, let's try to help the developer by showing what models ARE available
+    try:
+        available = [m.name for m in genai.list_models()]
+        debug_info = f"Models available: {available}"
+    except:
+        debug_info = "Could not list models."
+
     return {
         "verified": False, 
-        "reason": f"{friendly_prefix} (Error: {error_details[:100]})", 
+        "reason": f"{friendly_prefix} (Debug: {last_error[:50]} | {debug_info[:100]})", 
         "title": title, 
         "author": author
     }
+
