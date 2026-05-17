@@ -39,10 +39,16 @@ def _try_model(model_name, content, title, author):
     try:
         model = genai.GenerativeModel(model_name)
         prompt = f"""
-        Task: Verify if this is a real quote and identify the author/title.
+        Task: Strict Verification for Readvibe.
         Quote: "{content}"
         Title: "{title}"
         Author: "{author}"
+        
+        RULES:
+        1. If you cannot find the EXACT verbatim quote in a published book, movie, or historical record, "verified" MUST be false.
+        2. If title/author are generic (e.g., "Anonymous", "Untitled", "Internet"), "verified" MUST be false unless it's a world-famous proverb you can specifically source.
+        3. Accuracy is #1 priority. Do not guess.
+        
         Format: Respond ONLY in JSON.
         {{ "verified": boolean, "reason": "friendly text", "title": "string", "author": "string" }}
         """
