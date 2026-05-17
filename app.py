@@ -176,33 +176,16 @@ def onboarding():
         title, author = col1.text_input("Source Title"), col2.text_input("Author")
         if st.form_submit_button("Complete Registration"):
             content = format_quote(content)
-            if not content:
-                st.error("Please provide a quote.")
-            elif quote_exists(content):
-                st.error("Quote already exists in the community! Please share a unique one.")
-            else:
-                with st.spinner("AI verifying..."): 
-                    ai_res = verify_quote_with_ai(content, title, author)
-                
+            if content and not quote_exists(content):
+                with st.spinner("AI verifying..."): ai_res = verify_quote_with_ai(content, title, author)
                 temp = st.session_state.temp_signup
                 user_res = create_user(temp["username"], temp["password"])
-                
-                if user_res:
-                    user_id = user_res.inserted_id
-                    save_quote(
-                        content, 
-                        ai_res.get("title", title), 
-                        ai_res.get("author", author), 
-                        user_id, 
-                        is_verified=ai_res.get("verified", False)
-                    )
-                    st.session_state.user = verify_user(temp["username"], temp["password"])
-                    del st.session_state.temp_signup
-                    del st.session_state.onboarding_step
-                    st.success("Welcome aboard! 🎉")
-                    st.rerun()
-                else:
-                    st.error("Failed to create account. Please try a different username.")
+                save_quote(content, ai_res["title"], ai_res["author"], user_res.inserted_id, is_verified=ai_res["verified"])
+                st.session_state.user = verify_user(temp["username"], temp["password"])
+                del st.session_state.temp_signup
+                del st.session_state.onboarding_step
+                st.rerun()
+            elif quote_exists(content): st.error("Quote already exists in the community!")
 
 if st.session_state.user is None:
     if st.session_state.get("onboarding_step"):
