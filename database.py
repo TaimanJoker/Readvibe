@@ -84,7 +84,7 @@ def quote_exists(content):
     db = get_db()
     return db.quotes.find_one({"content": content}) is not None
 
-def save_quote(content, title, author, user_id, tags=None):
+def save_quote(content, title, author, user_id, tags=None, is_verified=False):
     db = get_db()
     
     # Generate Embedding for ML
@@ -102,6 +102,7 @@ def save_quote(content, title, author, user_id, tags=None):
         "added_by": user_id,
         "created_at": datetime.now(timezone.utc),
         "embedding": embedding,
+        "is_verified": is_verified,
         "net_votes": 0,
         "upvotes": 0,
         "downvotes": 0
@@ -231,14 +232,14 @@ def get_user_activity_dates(user_id):
 def get_recommended_quote(user_id):
     db = get_db()
     
-    # 1. Find user's latest upvote to use as a "seed"
+    # 1. Find user's latest upvote (only verified)
     last_upvote = db.interactions.find_one(
         {"user_id": user_id, "action": "upvote"},
         sort=[("timestamp", -1)]
     )
     
-    # Fallback to most popular if no upvotes or seed not found
-    fallback = db.quotes.find_one(sort=[("net_votes", -1)])
+    # Fallback to most popular VERIFIED
+    fallback = db.quotes.find_one({"is_verified": True}, sort=[("net_votes", -1)])
     
     if not last_upvote:
         return fallback
@@ -247,9 +248,8 @@ def get_recommended_quote(user_id):
     if not seed_quote or not seed_quote.get("embedding"):
         return fallback
     
-    # 2. Find quotes with similar embeddings (Basic Vector Search)
-    # Simple semantic sort for community scale
-    all_quotes = list(db.quotes.find({"_id": {"$ne": seed_quote["_id"]}}))
+    # 2. Find similar quotes (only verified)
+    all_quotes = list(db.quotes.find({"_id": {"$ne": seed_quote["_id"]}, "is_verified": True}))
     
     if not all_quotes: return seed_quote
     
@@ -258,12 +258,10 @@ def get_recommended_quote(user_id):
     
     try:
         seed_vec = np.array(seed_quote["embedding"]).reshape(1, -1)
-        # Only consider quotes that actually have embeddings
         eligible = [q for q in all_quotes if q.get("embedding")]
         if not eligible: return fallback
         
         other_vecs = np.array([q["embedding"] for q in eligible])
-        
         similarities = cosine_similarity(seed_vec, other_vecs)[0]
         best_idx = np.argmax(similarities)
         

@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Default Avatar List with Labels
+# Default Avatar List
 DEFAULT_AVATARS = {
     "Panda": "https://api.dicebear.com/7.x/bottts/svg?seed=Panda",
     "Cat": "https://api.dicebear.com/7.x/bottts/svg?seed=Felix",
@@ -42,18 +42,10 @@ def format_quote(text):
 # Custom CSS for Modern "Calm" Look
 st.markdown("""
     <style>
-    /* Main Background */
-    .stApp {
-        background-color: #fdfaf6;
-    }
+    .stApp { background-color: #fdfaf6; }
+    [data-testid="stSidebar"] { background-color: #f0f4f0 !important; border-right: 1px solid #e0eee0; }
     
-    /* Elegant Modern Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f0f4f0 !important;
-        border-right: 1px solid #e0eee0;
-    }
-    
-    /* Card Styling */
+    /* Unified Card Styling */
     .highlight-card {
         background-color: #ffffff;
         padding: 24px;
@@ -69,28 +61,11 @@ st.markdown("""
         line-height: 1.7;
         margin-bottom: 12px;
     }
-    .highlight-meta {
-        font-size: 0.85rem;
-        color: #888888;
-    }
-    .highlight-title {
-        font-weight: bold;
-        color: #5c8d89;
-    }
-    
-    /* Voting Buttons Styling */
-    .vote-btn-active-up {
-        background-color: #d4e2d4 !important;
-        color: #2e7d32 !important;
-        border: 1px solid #2e7d32 !important;
-    }
-    .vote-btn-active-down {
-        background-color: #ffebee !important;
-        color: #c62828 !important;
-        border: 1px solid #c62828 !important;
-    }
+    .highlight-meta { font-size: 0.85rem; color: #888888; }
+    .highlight-title { font-weight: bold; color: #5c8d89; }
+    .verified-badge { color: #8c8c8c; font-style: italic; font-size: 0.75rem; margin-left: 10px; }
 
-    /* Calendar Fix */
+    /* Calendar Grid Fix */
     .calendar-container {
         background-color: #ffffff;
         padding: 20px;
@@ -99,172 +74,143 @@ st.markdown("""
         max-width: 400px;
         margin: 0 auto 30px auto;
     }
+    .calendar-grid {
+        display: grid !important;
+        grid-template-columns: repeat(7, 1fr) !important;
+        gap: 10px !important;
+        text-align: center !important;
+    }
+    .calendar-day {
+        width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+        font-size: 0.85rem; border-radius: 8px; background-color: #ffffff; color: #d1d1d1; border: 1px solid #f0f0f0;
+    }
+    .day-active {
+        background-color: #d4e2d4; color: #5c8d89; font-weight: bold;
+        box-shadow: 0 0 10px rgba(212, 226, 212, 0.6); border: 2px solid #5c8d89;
+    }
+    .calendar-header { font-weight: bold; color: #5c8d89; font-size: 1.5rem; margin-bottom: 20px; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Authentication Logic ---
-if 'user' not in st.session_state:
-    st.session_state.user = None
+def render_quote_card(q, user_id, is_feed=True):
+    user_vote = get_user_vote(user_id, q["_id"])
+    verified_text = '<span class="verified-badge">✓ verified</span>' if q.get("is_verified") else ""
+    
+    with st.container():
+        st.markdown(f"""
+        <div class="highlight-card">
+            <div class="highlight-content">"{q["content"]}"</div>
+            <div class="highlight-meta">
+                <span class="highlight-title">{q["title"]}</span> by {q["author"]}
+                {verified_text}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Actions inside container but after HTML block to handle Streamlit buttons
+        if q["added_by"] != user_id:
+            v1, v2, v3 = st.columns([1, 1, 4])
+            if v1.button(f"⬆️ {q.get('upvotes', 0)}", key=f"u_{q['_id']}_{is_feed}", type="primary" if user_vote == "upvote" else "secondary"):
+                log_interaction(user_id, q["_id"], "upvote")
+                st.rerun()
+            if v2.button(f"⬇️ {q.get('downvotes', 0)}", key=f"d_{q['_id']}_{is_feed}", type="primary" if user_vote == "downvote" else "secondary"):
+                log_interaction(user_id, q["_id"], "downvote")
+                st.rerun()
+        else:
+            st.caption(f"✨ Your contribution • ⬆️ {q.get('upvotes', 0)} ⬇️ {q.get('downvotes', 0)}")
+
+# --- Authentication & Onboarding ---
+if 'user' not in st.session_state: st.session_state.user = None
 
 def login():
     st.title("Welcome to Readvibe 🌿")
-    st.write("Please sign in to continue to the community.")
     if st.button("Sign in with Google"):
-        mock_user_info = {
-            "google_id": "mock_google_123",
-            "email": "user@example.com",
-            "profile_pic": DEFAULT_AVATARS["Panda"]
-        }
-        user = get_user_by_google_id(mock_user_info["google_id"])
-        st.session_state.user = user if user else mock_user_info
+        mock_user = {"google_id": "mock_google_123", "email": "user@example.com", "profile_pic": DEFAULT_AVATARS["Panda"]}
+        user = get_user_by_google_id(mock_user["google_id"])
+        st.session_state.user = user if user else mock_user
         st.rerun()
 
 def onboarding():
     st.title("Join the Community 🌿")
-    st.write("Almost there! Choose your unique username and contribute your first quote.")
-    with st.form("onboarding_form"):
-        username = st.text_input("Choose a Username")
-        st.divider()
-        st.write("### Contribute your first unique quote")
-        content = st.text_area("The Quote", max_chars=300)
+    with st.form("onboarding"):
+        username = st.text_input("Username")
+        content = st.text_area("First Quote", max_chars=300)
         col1, col2 = st.columns(2)
-        title = col1.text_input("Source Title")
-        author = col2.text_input("Author")
-        submit = st.form_submit_button("Complete Registration")
-        if submit:
+        title, author = col1.text_input("Title"), col2.text_input("Author")
+        if st.form_submit_button("Join"):
             content = format_quote(content)
-            if not username: st.error("Username is required.")
-            elif get_user_by_username(username): st.error("Username taken.")
-            elif not content: st.error("Quote required.")
-            elif quote_exists(content): st.error("Quote already exists!")
-            else:
-                with st.spinner("AI verifying..."):
-                    ai_result = verify_quote_with_ai(content, title, author)
-                if ai_result["verified"]:
-                    user_res = create_user(st.session_state.user["google_id"], username, st.session_state.user["email"], st.session_state.user["profile_pic"])
-                    save_quote(content, ai_result["title"], ai_result["author"], user_res.inserted_id)
-                    st.session_state.user = get_user_by_google_id(st.session_state.user["google_id"])
-                    st.success("Welcome! 🎉")
-                    st.rerun()
-                else:
-                    st.error(f"Rejection: {ai_result['reason']}")
+            if username and content and not get_user_by_username(username) and not quote_exists(content):
+                with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
+                save_quote(content, ai_res["title"], ai_res["author"], st.session_state.user["google_id"], is_verified=ai_res["verified"])
+                user_res = create_user(st.session_state.user["google_id"], username, st.session_state.user["email"], st.session_state.user["profile_pic"])
+                st.session_state.user = get_user_by_google_id(st.session_state.user["google_id"])
+                st.rerun()
 
-if st.session_state.user is None:
-    login()
-    st.stop()
-if "_id" not in st.session_state.user:
-    onboarding()
-    st.stop()
-
+if st.session_state.user is None: login(); st.stop()
+if "_id" not in st.session_state.user: onboarding(); st.stop()
 user_data = st.session_state.user
 
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
-    
     with st.expander("🛠️ Switch Account (Debug)"):
-        if st.button("User: Taiman", use_container_width=True):
-            st.session_state.user = get_user_by_google_id("mock_google_123")
-            st.rerun()
-        if st.button("User: Sarah", use_container_width=True):
+        if st.button("Taiman"): st.session_state.user = get_user_by_google_id("mock_google_123"); st.rerun()
+        if st.button("Sarah"):
             sarah = get_user_by_google_id("mock_google_sarah")
-            if not sarah:
-                st.session_state.user = {"google_id": "mock_google_sarah", "email": "sarah@test.com", "profile_pic": DEFAULT_AVATARS["Cat"]}
-            else:
-                st.session_state.user = sarah
+            st.session_state.user = sarah if sarah else {"google_id": "mock_google_sarah", "email": "sarah@test.com", "profile_pic": DEFAULT_AVATARS["Cat"]}
             st.rerun()
-            
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = "Feed"
-    if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.current_page == "Feed" else "secondary"):
-        st.session_state.current_page = "Feed"
-        st.rerun()
-    if st.button("My Profile", use_container_width=True, type="primary" if st.session_state.current_page == "My Profile" else "secondary"):
-        st.session_state.current_page = "My Profile"
-        st.rerun()
+    if 'page' not in st.session_state: st.session_state.page = "Feed"
+    if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.page == "Feed" else "secondary"): st.session_state.page = "Feed"; st.rerun()
+    if st.button("My Profile", use_container_width=True, type="primary" if st.session_state.page == "My Profile" else "secondary"): st.session_state.page = "My Profile"; st.rerun()
     st.divider()
-    if st.button("Logout", use_container_width=True):
-        st.session_state.user = None
-        st.rerun()
+    if st.button("Logout", use_container_width=True): st.session_state.user = None; st.rerun()
 
 # --- Page Rendering ---
 def render_feed():
     st.title("Community Feed 🌿")
     with st.expander("✨ Share a New Quote"):
-        with st.form("new_quote_form"):
-            content = st.text_area("The Quote", max_chars=300)
-            col1, col2 = st.columns(2)
-            title = col1.text_input("Source")
-            author = col2.text_input("Author")
-            submit = st.form_submit_button("Submit")
-            if submit:
+        with st.form("new_quote"):
+            content = st.text_area("Quote", max_chars=300)
+            c1, c2 = st.columns(2); title, author = c1.text_input("Source"), c2.text_input("Author")
+            if st.form_submit_button("Submit"):
                 content = format_quote(content)
                 if content and not quote_exists(content):
-                    with st.spinner("AI verifying..."):
-                        ai_result = verify_quote_with_ai(content, title, author)
-                    if ai_result["verified"]:
-                        save_quote(content, ai_result["title"], ai_result["author"], user_data["_id"])
-                        st.success("Added! ✨")
-                        st.rerun()
-                    else: st.error(ai_result["reason"])
+                    with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
+                    save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_data["_id"], is_verified=ai_res.get("verified", False))
+                    st.success("Shared!"); st.rerun()
 
     st.write("### Consistency Tracker")
     activity = get_user_activity_dates(user_data["_id"])
-    if 'feed_month' not in st.session_state:
-        st.session_state.feed_month = datetime.datetime.now(timezone.utc).month
-        st.session_state.feed_year = datetime.datetime.now(timezone.utc).year
-    nav_cols = st.columns([1, 1, 3, 1, 1])
-    if nav_cols[0].button("←", key="p"):
-        st.session_state.feed_month -= 1
-        if st.session_state.feed_month == 0:
-            st.session_state.feed_month = 12
-            st.session_state.feed_year -= 1
+    if 'f_m' not in st.session_state: st.session_state.f_m, st.session_state.f_y = datetime.datetime.now(timezone.utc).month, datetime.datetime.now(timezone.utc).year
+    nav = st.columns([1, 1, 3, 1, 1])
+    if nav[0].button("←"): 
+        st.session_state.f_m -= 1
+        if st.session_state.f_m == 0: st.session_state.f_m = 12; st.session_state.f_y -= 1
         st.rerun()
-    if nav_cols[2].button("Today 🌿", use_container_width=True):
-        st.session_state.feed_month = datetime.datetime.now(timezone.utc).month
-        st.session_state.feed_year = datetime.datetime.now(timezone.utc).year
-        st.rerun()
-    if nav_cols[4].button("→", key="n"):
-        st.session_state.feed_month += 1
-        if st.session_state.feed_month == 13:
-            st.session_state.feed_month = 1
-            st.session_state.feed_year += 1
+    if nav[2].button("Today 🌿", use_container_width=True): st.session_state.f_m, st.session_state.f_y = datetime.datetime.now(timezone.utc).month, datetime.datetime.now(timezone.utc).year; st.rerun()
+    if nav[4].button("→"):
+        st.session_state.f_m += 1
+        if st.session_state.f_m == 13: st.session_state.f_m = 1; st.session_state.f_y += 1
         st.rerun()
 
-    view_month = st.session_state.feed_month
-    view_year = st.session_state.feed_year
-    cal_data = calendar.monthcalendar(view_year, view_month)
-    header_html = "".join([f'<div style="font-weight: bold; color: #5c8d89;">{d}</div>' for d in ['M', 'T', 'W', 'T', 'F', 'S', 'S']])
-    body_html = ""
-    for week in cal_data:
+    cal = calendar.monthcalendar(st.session_state.f_y, st.session_state.f_m)
+    h_html = "".join([f'<div style="font-weight: bold; color: #5c8d89;">{d}</div>' for d in ['M', 'T', 'W', 'T', 'F', 'S', 'S']])
+    b_html = ""
+    for week in cal:
         for day in week:
-            if day == 0: body_html += '<div></div>'
+            if day == 0: b_html += '<div></div>'
             else:
-                date_str = f"{view_year}-{view_month:02d}-{day:02d}"
-                is_active = date_str in activity
-                body_html += f'<div class="calendar-day {"day-active" if is_active else ""}">{day}</div>'
-    st.markdown(f'<div class="calendar-container"><div class="calendar-header">{calendar.month_name[view_month]} {view_year}</div><div class="calendar-grid">{header_html}{body_html}</div></div>', unsafe_allow_html=True)
+                d_str = f"{st.session_state.f_y}-{st.session_state.f_m:02d}-{day:02d}"
+                b_html += f'<div class="calendar-day {"day-active" if d_str in activity else ""}">{day}</div>'
+    st.markdown(f'<div class="calendar-container"><div class="calendar-header">{calendar.month_name[st.session_state.f_m]} {st.session_state.f_y}</div><div class="calendar-grid">{h_html}{b_html}</div></div>', unsafe_allow_html=True)
 
-    st.write("---")
     featured = get_recommended_quote(user_data["_id"])
     if featured:
+        st.write("---")
         st.markdown(f'<div class="featured-card"><div class="featured-badge">Recommended for You</div><div class="featured-content">"{featured["content"]}"</div><div style="margin-top: 15px; font-style: italic; color: #8c8c8c;">— {featured["title"]} by {featured["author"]}</div></div>', unsafe_allow_html=True)
 
     st.write("### Community Feed")
-    quotes = get_quotes(limit=20)
-    for q in quotes:
-        st.markdown(f'<div class="highlight-card"><div class="highlight-content">"{q["content"]}"</div><div class="highlight-meta"><span class="highlight-title">{q["title"]}</span> by {q["author"]}</div></div>', unsafe_allow_html=True)
-        if q["added_by"] != user_data["_id"]:
-            user_vote = get_user_vote(user_data["_id"], q["_id"])
-            v1, v2, v3 = st.columns([1, 1, 4])
-            if v1.button(f"⬆️ {q.get('upvotes', 0)}", key=f"u_{q['_id']}", type="primary" if user_vote == "upvote" else "secondary"):
-                log_interaction(user_data["_id"], q["_id"], "upvote")
-                st.rerun()
-            if v2.button(f"⬇️ {q.get('downvotes', 0)}", key=f"d_{q['_id']}", type="primary" if user_vote == "downvote" else "secondary"):
-                log_interaction(user_data["_id"], q["_id"], "downvote")
-                st.rerun()
-        else:
-            st.caption(f"✨ Your contribution • ⬆️ {q.get('upvotes', 0)} ⬇️ {q.get('downvotes', 0)}")
+    for q in get_quotes(limit=20): render_quote_card(q, user_data["_id"], is_feed=True)
 
 def render_profile():
     st.title(f"@{user_data['username']} 🌿")
@@ -273,17 +219,13 @@ def render_profile():
         st.image(user_data["profile_pic"], width=120)
         with st.expander("Change Avatar 🐾"):
             for name, url in DEFAULT_AVATARS.items():
-                if st.button(f"Choose {name}", key=f"av_{name}", use_container_width=True):
-                    update_user_profile_pic(user_data["_id"], url)
-                    st.session_state.user["profile_pic"] = url
-                    st.rerun()
+                if st.button(name, key=f"av_{name}", use_container_width=True):
+                    update_user_profile_pic(user_data["_id"], url); st.session_state.user["profile_pic"] = url; st.rerun()
     with p2:
-        st.write(f"**Verified Highlights:** {len(get_user_quotes(user_data['_id']))}")
-        st.write(f"**Community Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)} | ⬇️ {user_data.get('total_downvotes_received', 0)}")
-    st.write("---")
-    st.write("### My Highlights")
-    for q in get_user_quotes(user_data["_id"]):
-        st.markdown(f'<div class="highlight-card"><div class="highlight-content">"{q["content"]}"</div><div class="highlight-meta"><span class="highlight-title">{q["title"]}</span> by {q["author"]} • ⬆️ {q.get("upvotes", 0)} ⬇️ {q.get("downvotes", 0)}</div></div>', unsafe_allow_html=True)
+        st.write(f"**Verified Highlights:** {len([q for q in get_user_quotes(user_data['_id']) if q.get('is_verified')])}")
+        st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)}")
+    st.write("---"); st.write("### My Highlights")
+    for q in get_user_quotes(user_data["_id"]): render_quote_card(q, user_data["_id"], is_feed=False)
 
-if st.session_state.current_page == "Feed": render_feed()
+if st.session_state.page == "Feed": render_feed()
 else: render_profile()
