@@ -24,14 +24,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Default Avatar List (Animal-style mascots)
+# Default Avatar List
 DEFAULT_AVATARS = {
-    "Panda": "https://api.dicebear.com/7.x/big-smile/svg?seed=Panda",
-    "Lion": "https://api.dicebear.com/7.x/big-smile/svg?seed=Lion",
-    "Rabbit": "https://api.dicebear.com/7.x/big-smile/svg?seed=Rabbit",
-    "Bear": "https://api.dicebear.com/7.x/big-smile/svg?seed=Bear",
-    "Fox": "https://api.dicebear.com/7.x/big-smile/svg?seed=Fox",
-    "Owl": "https://api.dicebear.com/7.x/big-smile/svg?seed=Owl"
+    "Panda": "https://api.dicebear.com/7.x/bottts/svg?seed=Panda",
+    "Cat": "https://api.dicebear.com/7.x/bottts/svg?seed=Felix",
+    "Dog": "https://api.dicebear.com/7.x/bottts/svg?seed=Buster",
+    "Bear": "https://api.dicebear.com/7.x/bottts/svg?seed=Bear",
+    "Fox": "https://api.dicebear.com/7.x/bottts/svg?seed=Fox",
+    "Owl": "https://api.dicebear.com/7.x/bottts/svg?seed=Owl"
 }
 
 # Helper to format content
@@ -40,19 +40,17 @@ def format_quote(text):
     text = text.strip()
     return text[0].upper() + text[1:]
 
-# Custom CSS for Modern "Calm" Look
+# Custom CSS
 st.markdown("""
     <style>
     .stApp { background-color: #fdfaf6; }
     [data-testid="stSidebar"] { background-color: #f0f4f0 !important; border-right: 1px solid #e0eee0; }
-    
-    /* Unified Card Styling */
     .highlight-card {
         background-color: #ffffff;
         padding: 24px;
         border-radius: 20px;
         border: 1px solid #f0f0f0;
-        margin-bottom: 10px;
+        margin-bottom: 20px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
     .highlight-content {
@@ -62,74 +60,35 @@ st.markdown("""
         line-height: 1.7;
         margin-bottom: 12px;
     }
-    .highlight-meta { font-size: 0.85rem; color: #888888; margin-bottom: 15px; }
+    .highlight-meta { font-size: 0.85rem; color: #888888; }
     .highlight-title { font-weight: bold; color: #5c8d89; }
-    .verified-badge { color: #8c8c8c; font-style: italic; font-size: 0.75rem; margin-left: 10px; }
-    
-    /* Featured Section (Hero) */
-    .featured-container {
-        background: linear-gradient(135deg, #5c8d89 0%, #4a7a76 100%);
-        padding: 35px;
-        border-radius: 25px;
-        color: white !important;
-        margin-bottom: 40px;
-        box-shadow: 0 10px 25px rgba(92, 141, 137, 0.3);
-        text-align: center;
-    }
-    .featured-content { font-family: 'Georgia', serif; font-size: 1.5rem; font-style: italic; line-height: 1.6; margin-bottom: 20px; color: white !important; }
-    .featured-meta { font-size: 0.9rem; opacity: 0.9; color: white !important; }
-    .featured-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 15px; display: inline-block; color: white !important; }
-
-    /* Calendar Grid Fix */
-    .calendar-container {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 20px;
-        border: 1px solid #e0eee0;
-        max-width: 400px;
-        margin: 0 auto 30px auto;
-    }
-    .calendar-grid {
-        display: grid !important;
-        grid-template-columns: repeat(7, 1fr) !important;
-        gap: 10px !important;
-        text-align: center !important;
-    }
-    .calendar-day {
-        width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-        font-size: 0.85rem; border-radius: 8px; background-color: #ffffff; color: #d1d1d1; border: 1px solid #f0f0f0;
-    }
-    .day-active {
-        background-color: #d4e2d4; color: #5c8d89; font-weight: bold;
-        box-shadow: 0 0 10px rgba(212, 226, 212, 0.6); border: 2px solid #5c8d89;
-    }
+    .vote-btn-active-up { background-color: #d4e2d4 !important; color: #2e7d32 !important; }
+    .vote-btn-active-down { background-color: #ffebee !important; color: #c62828 !important; }
+    .calendar-container { background-color: #ffffff; padding: 20px; border-radius: 20px; max-width: 400px; margin: 0 auto 30px auto; border: 1px solid #e0eee0; }
+    .calendar-grid { display: grid !important; grid-template-columns: repeat(7, 1fr) !important; gap: 10px !important; text-align: center !important; }
+    .calendar-day { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; border-radius: 8px; background-color: #ffffff; color: #d1d1d1; border: 1px solid #f0f0f0; }
+    .day-active { background-color: #d4e2d4; color: #5c8d89; font-weight: bold; border: 2px solid #5c8d89; }
     .calendar-header { font-weight: bold; color: #5c8d89; font-size: 1.5rem; margin-bottom: 20px; text-align: center; }
+    .featured-container { background: linear-gradient(135deg, #5c8d89 0%, #4a7a76 100%); padding: 35px; border-radius: 25px; color: white !important; margin-bottom: 40px; box-shadow: 0 10px 25px rgba(92, 141, 137, 0.3); text-align: center; }
+    .featured-content { font-family: 'Georgia', serif; font-size: 1.5rem; font-style: italic; line-height: 1.6; margin-bottom: 20px; }
+    .featured-meta { font-size: 0.9rem; opacity: 0.9; }
+    .featured-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 15px; display: inline-block; }
+    .verified-badge { color: #8c8c8c; font-style: italic; font-size: 0.75rem; margin-left: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
 def render_quote_card(q, user_id, key_suffix=""):
     user_vote = get_user_vote(user_id, q["_id"])
     verified_tag = '<span class="verified-badge">✓ verified</span>' if q.get("is_verified") else ""
-    
-    with st.container():
-        st.markdown(f"""
-        <div class="highlight-card">
-            <div class="highlight-content">"{q["content"]}"</div>
-            <div class="highlight-meta">
-                <span class="highlight-title">{q["title"]}</span> by {q["author"]} {verified_tag}
-            </div>
-        """, unsafe_allow_html=True)
-        
-        if q["added_by"] != user_id:
-            v1, v2, v3 = st.columns([1, 1, 4])
-            if v1.button(f"⬆️ {q.get('upvotes', 0)}", key=f"u_{q['_id']}_{key_suffix}", type="primary" if user_vote == "upvote" else "secondary"):
-                log_interaction(user_id, q["_id"], "upvote"); st.rerun()
-            if v2.button(f"⬇️ {q.get('downvotes', 0)}", key=f"d_{q['_id']}_{key_suffix}", type="primary" if user_vote == "downvote" else "secondary"):
-                log_interaction(user_id, q["_id"], "downvote"); st.rerun()
-        else:
-            st.caption(f"✨ Your contribution • ⬆️ {q.get('upvotes', 0)} ⬇️ {q.get('downvotes', 0)}")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(f'<div class="highlight-card"><div class="highlight-content">"{q["content"]}"</div><div class="highlight-meta"><span class="highlight-title">{q["title"]}</span> by {q["author"]} {verified_tag}</div>', unsafe_allow_html=True)
+    if q["added_by"] != user_id:
+        v1, v2, v3 = st.columns([1, 1, 4])
+        if v1.button(f"⬆️ {q.get('upvotes', 0)}", key=f"u_{q['_id']}_{key_suffix}", type="primary" if user_vote == "upvote" else "secondary"):
+            log_interaction(user_id, q["_id"], "upvote"); st.rerun()
+        if v2.button(f"⬇️ {q.get('downvotes', 0)}", key=f"d_{q['_id']}_{key_suffix}", type="primary" if user_vote == "downvote" else "secondary"):
+            log_interaction(user_id, q["_id"], "downvote"); st.rerun()
+    else: st.caption(f"✨ Your contribution • ⬆️ {q.get('upvotes', 0)} ⬇️ {q.get('downvotes', 0)}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Authentication & Onboarding ---
 client_id = get_secret("GOOGLE_CLIENT_ID")
@@ -145,10 +104,12 @@ def handle_login():
     
     user_info = login_with_google(client_id, client_secret, redirect_uri)
     if user_info:
+        # user_info contains 'id', 'email', 'picture'
         existing_user = get_user_by_google_id(user_info['id'])
         if existing_user:
             st.session_state.user = existing_user
         else:
+            # Prepare data for onboarding
             st.session_state.user = {
                 "google_id": user_info['id'],
                 "email": user_info['email'],
@@ -172,23 +133,21 @@ def onboarding():
                 save_quote(content, ai_res["title"], ai_res["author"], user_res.inserted_id, is_verified=ai_res["verified"])
                 st.session_state.user = get_user_by_google_id(st.session_state.user["google_id"])
                 st.rerun()
-            elif get_user_by_username(username): st.error("Username taken!")
+            elif get_user_by_username(username): st.error("Username already taken!")
 
-if st.session_state.user is None: handle_login(); st.stop()
-if st.session_state.user.get("needs_onboarding"): onboarding(); st.stop()
+if st.session_state.user is None:
+    handle_login()
+    st.stop()
+
+if st.session_state.user.get("needs_onboarding"):
+    onboarding()
+    st.stop()
 
 user_data = st.session_state.user
 
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
-    with st.expander("🛠️ Debug Tools"):
-        if st.button("User: Taiman", use_container_width=True):
-            st.session_state.user = get_user_by_google_id("mock_google_123"); st.rerun()
-        if st.button("User: Sarah", use_container_width=True):
-            sarah = get_user_by_google_id("mock_google_sarah")
-            st.session_state.user = sarah if sarah else {"google_id": "mock_google_sarah", "email": "sarah@test.com", "profile_pic": DEFAULT_AVATARS["Rabbit"]}
-            st.rerun()
     if 'page' not in st.session_state: st.session_state.page = "Feed"
     if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.page == "Feed" else "secondary"): st.session_state.page = "Feed"; st.rerun()
     if st.button("My Profile", use_container_width=True, type="primary" if st.session_state.page == "My Profile" else "secondary"): st.session_state.page = "My Profile"; st.rerun()
@@ -217,10 +176,10 @@ def render_feed():
     if nav[2].button("Today", use_container_width=True): st.session_state.f_m, st.session_state.f_y = datetime.datetime.now(timezone.utc).month, datetime.datetime.now(timezone.utc).year
     if nav[4].button("→"): st.session_state.f_m += 1
     
-    cal_data = calendar.monthcalendar(st.session_state.f_y, st.session_state.f_m)
+    cal = calendar.monthcalendar(st.session_state.f_y, st.session_state.f_m)
     h_html = "".join([f'<div style="font-weight: bold; color: #5c8d89;">{d}</div>' for d in ['M', 'T', 'W', 'T', 'F', 'S', 'S']])
     b_html = ""
-    for week in cal_data:
+    for week in cal:
         for day in week:
             if day == 0: b_html += '<div></div>'
             else:
@@ -232,13 +191,7 @@ def render_feed():
     featured_id = featured["_id"] if featured else None
     if featured:
         st.write("### Top Reflection")
-        st.markdown(f"""
-        <div class="featured-container">
-            <div class="featured-badge">Highly Recommended</div>
-            <div class="featured-content">"{featured["content"]}"</div>
-            <div class="featured-meta">— {featured["title"]} by {featured["author"]}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="featured-container"><div class="featured-badge">Highly Recommended</div><div class="featured-content">"{featured["content"]}"</div><div class="featured-meta">— {featured["title"]} by {featured["author"]}</div></div>', unsafe_allow_html=True)
 
     st.write("---")
     st.write("### Community Feed")
@@ -258,7 +211,7 @@ def render_profile():
                     update_user_profile_pic(user_data["_id"], url); st.session_state.user["profile_pic"] = url; st.rerun()
     with p2:
         st.write(f"**Verified Highlights:** {len([q for q in get_user_quotes(user_data['_id']) if q.get('is_verified')])}")
-        st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)} | ⬇️ {user_data.get('total_downvotes_received', 0)}")
+        st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)}")
     st.write("---"); st.write("### My Highlights")
     for q in get_user_quotes(user_data["_id"]): render_quote_card(q, user_data["_id"], key_suffix="prof")
 
