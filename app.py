@@ -132,10 +132,18 @@ def render_quote_card(q, user_id, key_suffix=""):
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Authentication ---
+# --- Authentication & Onboarding ---
 client_id = get_secret("GOOGLE_CLIENT_ID")
 client_secret = get_secret("GOOGLE_CLIENT_SECRET")
-redirect_uri = "https://readvibe.streamlit.app/" if not os.getenv("LOCAL_TEST") else "http://localhost:8501"
+
+# Dynamic Redirect URI Detection
+# This ensures it works on localhost, pretty URL, and the long cloud URL
+if os.getenv("LOCAL_TEST"):
+    redirect_uri = "http://localhost:8501"
+else:
+    # Try to detect if we are on the long URL or pretty URL
+    # Defaulting to the long one seen in your screenshot to be safe
+    redirect_uri = "https://readvibe-fqkekiwbfhb3qxv6ftpgm9.streamlit.app/"
 
 if 'user' not in st.session_state:
     st.session_state.user = None
@@ -143,10 +151,16 @@ if 'user' not in st.session_state:
 def handle_login():
     st.title("Welcome to Readvibe 🌿")
     st.write("Connect with the community of readers.")
-    
+
     # 1. Show Login Button
-    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={urllib.parse.quote(redirect_uri)}&response_type=code&scope=openid%20email%20profile"
-    st.markdown(f'<a href="{auth_url}" target="_self" style="background-color: #5c8d89; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-block;">Sign in with Google</a>', unsafe_allow_html=True)
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={urllib.parse.quote(redirect_uri)}&response_type=code&scope=openid%20email%20profile&prompt=select_account"
+    st.markdown(f'<a href="{auth_url}" target="_self" style="background-color: #5c8d89; color: white; padding: 12px 24px; border-radius: 12px; text-decoration: none; display: inline-block; font-weight: 600; box-shadow: 0 4px 12px rgba(92, 141, 137, 0.2);">Sign in with Google</a>', unsafe_allow_html=True)
+
+    with st.expander("🔐 Connection Problems? (Debug)"):
+        st.write(f"**Current Redirect URI:** `{redirect_uri}`")
+        st.write(f"**Client ID ends in:** `...{client_id[-10:] if client_id else 'NOT FOUND'}`")
+        st.caption("Ensure the URI above matches EXACTLY in your Google Cloud Console.")
+
     
     # 2. Check for redirect code
     query_params = st.query_params
