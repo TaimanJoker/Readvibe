@@ -4,10 +4,8 @@ pymongo
 python-telegram-bot
 python-dotenv
 requests
+bcrypt
 google-generativeai
 sentence-transformers
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
 pandas
 scikit-learn
