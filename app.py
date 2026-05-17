@@ -1,6 +1,5 @@
 import streamlit as st
-import requests
-import urllib.parse
+from streamlit_google_oauth import login_with_google
 from database import (
     get_secret, TZ_OFFSET, get_user_by_google_id, create_user, 
     get_user_by_username, save_quote, quote_exists, init_db,
@@ -25,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Default Avatar List
+# Default Avatar List (Animal-style mascots)
 DEFAULT_AVATARS = {
     "Panda": "https://api.dicebear.com/7.x/big-smile/svg?seed=Panda",
     "Lion": "https://api.dicebear.com/7.x/big-smile/svg?seed=Lion",
@@ -132,7 +131,7 @@ def render_quote_card(q, user_id, key_suffix=""):
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-# --- Authentication ---
+# --- Authentication & Onboarding ---
 client_id = get_secret("GOOGLE_CLIENT_ID")
 client_secret = get_secret("GOOGLE_CLIENT_SECRET")
 redirect_uri = "https://readvibe.streamlit.app/" if not os.getenv("LOCAL_TEST") else "http://localhost:8501"
@@ -144,46 +143,19 @@ def handle_login():
     st.title("Welcome to Readvibe 🌿")
     st.write("Connect with the community of readers.")
     
-    # 1. Show Login Button
-    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={urllib.parse.quote(redirect_uri)}&response_type=code&scope=openid%20email%20profile"
-    st.markdown(f'<a href="{auth_url}" target="_self" style="background-color: #5c8d89; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-block;">Sign in with Google</a>', unsafe_allow_html=True)
-    
-    # 2. Check for redirect code
-    query_params = st.query_params
-    if "code" in query_params:
-        code = query_params["code"]
-        # Exchange code for token
-        token_url = "https://oauth2.googleapis.com/token"
-        data = {
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code"
-        }
-        with st.spinner("Logging you in..."):
-            response = requests.post(token_url, data=data)
-            if response.status_code == 200:
-                access_token = response.json().get("access_token")
-                # Get user info
-                user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
-                headers = {"Authorization": f"Bearer {access_token}"}
-                user_info_response = requests.get(user_info_url, headers=headers)
-                if user_info_response.status_code == 200:
-                    user_info = user_info_response.json()
-                    # Success!
-                    st.query_params.clear() # Clear code from URL
-                    existing_user = get_user_by_google_id(user_info['id'])
-                    if existing_user:
-                        st.session_state.user = existing_user
-                    else:
-                        st.session_state.user = {
-                            "google_id": user_info['id'],
-                            "email": user_info['email'],
-                            "profile_pic": user_info.get('picture', DEFAULT_AVATARS["Panda"]),
-                            "needs_onboarding": True
-                        }
-                    st.rerun()
+    user_info = login_with_google(client_id, client_secret, redirect_uri)
+    if user_info:
+        existing_user = get_user_by_google_id(user_info['id'])
+        if existing_user:
+            st.session_state.user = existing_user
+        else:
+            st.session_state.user = {
+                "google_id": user_info['id'],
+                "email": user_info['email'],
+                "profile_pic": user_info['picture'],
+                "needs_onboarding": True
+            }
+        st.rerun()
 
 def onboarding():
     st.title("Join the Community 🌿")
@@ -210,7 +182,7 @@ user_data = st.session_state.user
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
-    with st.expander("🛠️ Switch Account (Debug)"):
+    with st.expander("🛠️ Debug Tools"):
         if st.button("User: Taiman", use_container_width=True):
             st.session_state.user = get_user_by_google_id("mock_google_123"); st.rerun()
         if st.button("User: Sarah", use_container_width=True):
@@ -223,7 +195,7 @@ with st.sidebar:
     st.divider()
     if st.button("Logout", use_container_width=True): st.session_state.user = None; st.rerun()
 
-# --- Pages ---
+# --- Content ---
 def render_feed():
     st.title("Community Feed 🌿")
     with st.expander("✨ Share a New Quote"):
