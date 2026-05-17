@@ -1,6 +1,8 @@
 import streamlit as st
+import requests
+import urllib.parse
 from database import (
-    get_secret, TZ_OFFSET, create_user, verify_user,
+    get_secret, TZ_OFFSET, get_user_by_google_id, create_user, 
     get_user_by_username, save_quote, quote_exists, init_db,
     get_quotes, get_user_activity_dates, log_interaction, 
     get_user_quotes, get_user_vote, update_user_profile_pic, get_recommended_quote, get_db
@@ -39,7 +41,7 @@ def format_quote(text):
     text = text.strip()
     return text[0].upper() + text[1:]
 
-# Custom CSS
+# Custom CSS for Modern "Calm" Look
 st.markdown("""
     <style>
     .stApp { background-color: #fdfaf6; }
@@ -64,7 +66,7 @@ st.markdown("""
     .highlight-meta { font-size: 0.85rem; color: #888888; margin-bottom: 15px; }
     .highlight-title { font-weight: bold; color: #5c8d89; }
     .verified-badge { color: #8c8c8c; font-style: italic; font-size: 0.75rem; margin-left: 10px; }
-
+    
     /* Featured Section (Hero) */
     .featured-container {
         background: linear-gradient(135deg, #5c8d89 0%, #4a7a76 100%);
@@ -131,81 +133,117 @@ def render_quote_card(q, user_id, key_suffix=""):
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Authentication & Onboarding ---
+client_id = get_secret("GOOGLE_CLIENT_ID")
+client_secret = get_secret("GOOGLE_CLIENT_SECRET")
+
+# Dynamic Redirect URI Detection
+# This ensures it works on localhost, pretty URL, and the long cloud URL
+if os.getenv("LOCAL_TEST"):
+    redirect_uri = "http://localhost:8501"
+else:
+    # Try to detect if we are on the long URL or pretty URL
+    # Defaulting to the long one seen in your screenshot to be safe
+    redirect_uri = "https://readvibe-fqkekiwbfhb3qxv6ftpgm9.streamlit.app/"
+
 if 'user' not in st.session_state:
     st.session_state.user = None
 
-def handle_login_signup():
+def handle_login():
     st.title("Welcome to Readvibe 🌿")
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    st.write("Connect with the community of readers.")
+
+    # 1. Show Login Button
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={urllib.parse.quote(redirect_uri)}&response_type=code&scope=openid%20email%20profile&prompt=select_account"
+    st.markdown(f'<a href="{auth_url}" target="_self" style="background-color: #5c8d89; color: white; padding: 12px 24px; border-radius: 12px; text-decoration: none; display: inline-block; font-weight: 600; box-shadow: 0 4px 12px rgba(92, 141, 137, 0.2);">Sign in with Google</a>', unsafe_allow_html=True)
+
+    with st.expander("🔐 Connection Problems? (Debug)"):
+        st.write(f"**Current Redirect URI:** `{redirect_uri}`")
+        st.write(f"**Client ID ends in:** `...{client_id[-10:] if client_id else 'NOT FOUND'}`")
+        st.caption("Ensure the URI above matches EXACTLY in your Google Cloud Console.")
+
     
-    with tab1:
-        with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
-                user = verify_user(username, password)
-                if user:
-                    st.session_state.user = user
-                    st.rerun()
+    # 2. Check for redirect code
+    query_params = st.query_params
+    if "code" in query_params:
+        code = query_params["code"]
+        # Exchange code for token
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code"
+        }
+        with st.spinner("Logging you in..."):
+            try:
+                response = requests.post(token_url, data=data, timeout=10)
+                if response.status_code == 200:
+                    access_token = response.json().get("access_token")
+                    user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+                    headers = {"Authorization": f"Bearer {access_token}"}
+                    user_info_response = requests.get(user_info_url, headers=headers, timeout=10)
+                    if user_info_response.status_code == 200:
+                        user_info = user_info_response.json()
+                        st.query_params.clear()
+                        existing_user = get_user_by_google_id(user_info['id'])
+                        if existing_user:
+                            st.session_state.user = existing_user
+                        else:
+                            st.session_state.user = {
+                                "google_id": user_info['id'],
+                                "email": user_info['email'],
+                                "profile_pic": user_info.get('picture', DEFAULT_AVATARS["Panda"]),
+                                "needs_onboarding": True
+                            }
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to fetch user info: {user_info_response.text}")
                 else:
-                    st.error("Invalid username or password.")
-    
-    with tab2:
-        with st.form("signup_form"):
-            new_user = st.text_input("Choose Username")
-            new_pass = st.text_input("Choose Password", type="password")
-            confirm_pass = st.text_input("Confirm Password", type="password")
-            if st.form_submit_button("Create Account"):
-                if new_pass != confirm_pass:
-                    st.error("Passwords do not match.")
-                elif len(new_pass) < 6:
-                    st.error("Password must be at least 6 characters.")
-                elif get_user_by_username(new_user):
-                    st.error("Username already exists.")
-                else:
-                    st.session_state.temp_signup = {"username": new_user, "password": new_pass}
-                    st.session_state.onboarding_step = True
-                    st.rerun()
+                    st.error(f"Google Token Error: {response.text}")
+                    st.info("Check if your Client Secret and Redirect URI are correct in Streamlit Secrets.")
+            except Exception as e:
+                st.error(f"Login failed: {str(e)}")
 
 def onboarding():
-    st.title("Final Step 🌿")
-    st.write("To join the community, please contribute your first unique quote.")
+    st.title("Join the Community 🌿")
     with st.form("onboarding"):
+        username = st.text_input("Choose a Username")
         content = st.text_area("Share your first unique quote", max_chars=300)
         col1, col2 = st.columns(2)
         title, author = col1.text_input("Source Title"), col2.text_input("Author")
-        if st.form_submit_button("Complete Registration"):
+        if st.form_submit_button("Join Community"):
             content = format_quote(content)
-            if content and not quote_exists(content):
+            if username and content and not get_user_by_username(username) and not quote_exists(content):
                 with st.spinner("AI verifying..."): ai_res = verify_quote_with_ai(content, title, author)
-                temp = st.session_state.temp_signup
-                user_res = create_user(temp["username"], temp["password"])
+                user_res = create_user(st.session_state.user["google_id"], username, st.session_state.user["email"], st.session_state.user["profile_pic"])
                 save_quote(content, ai_res["title"], ai_res["author"], user_res.inserted_id, is_verified=ai_res["verified"])
-                st.session_state.user = verify_user(temp["username"], temp["password"])
-                del st.session_state.temp_signup
-                del st.session_state.onboarding_step
+                st.session_state.user = get_user_by_google_id(st.session_state.user["google_id"])
                 st.rerun()
-            elif quote_exists(content): st.error("Quote already exists in the community!")
+            elif get_user_by_username(username): st.error("Username taken!")
 
-if st.session_state.user is None:
-    if st.session_state.get("onboarding_step"):
-        onboarding()
-    else:
-        handle_login_signup()
-    st.stop()
+if st.session_state.user is None: handle_login(); st.stop()
+if st.session_state.user.get("needs_onboarding"): onboarding(); st.stop()
 
 user_data = st.session_state.user
 
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
+    with st.expander("🛠️ Switch Account (Debug)"):
+        if st.button("User: Taiman", use_container_width=True):
+            st.session_state.user = get_user_by_google_id("mock_google_123"); st.rerun()
+        if st.button("User: Sarah", use_container_width=True):
+            sarah = get_user_by_google_id("mock_google_sarah")
+            st.session_state.user = sarah if sarah else {"google_id": "mock_google_sarah", "email": "sarah@test.com", "profile_pic": DEFAULT_AVATARS["Rabbit"]}
+            st.rerun()
     if 'page' not in st.session_state: st.session_state.page = "Feed"
     if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.page == "Feed" else "secondary"): st.session_state.page = "Feed"; st.rerun()
     if st.button("My Profile", use_container_width=True, type="primary" if st.session_state.page == "My Profile" else "secondary"): st.session_state.page = "My Profile"; st.rerun()
     st.divider()
     if st.button("Logout", use_container_width=True): st.session_state.user = None; st.rerun()
 
-# --- Content ---
+# --- Pages ---
 def render_feed():
     st.title("Community Feed 🌿")
     with st.expander("✨ Share a New Quote"):
@@ -246,7 +284,7 @@ def render_feed():
         <div class="featured-container">
             <div class="featured-badge">Highly Recommended</div>
             <div class="featured-content">"{featured["content"]}"</div>
-            <div style="margin-top: 15px; font-style: italic; color: #8c8c8c; color: white !important;">— {featured["title"]} by {featured["author"]}</div>
+            <div class="featured-meta">— {featured["title"]} by {featured["author"]}</div>
         </div>
         """, unsafe_allow_html=True)
 
