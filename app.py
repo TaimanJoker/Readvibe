@@ -3,7 +3,7 @@ from database import (
     get_secret, TZ_OFFSET, get_user_by_google_id, create_user, 
     get_user_by_username, save_quote, quote_exists, init_db,
     get_quotes, get_user_activity_dates, log_interaction, 
-    get_user_quotes, get_user_vote, update_user_profile_pic, get_recommended_quote
+    get_user_quotes, get_user_vote, update_user_profile_pic, get_recommended_quote, get_db
 )
 import datetime
 from datetime import timedelta, timezone
@@ -23,14 +23,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Default Avatar List
+# Default Avatar List (Animal-style mascots)
 DEFAULT_AVATARS = {
-    "Panda": "https://api.dicebear.com/7.x/bottts/svg?seed=Panda",
-    "Cat": "https://api.dicebear.com/7.x/bottts/svg?seed=Felix",
-    "Dog": "https://api.dicebear.com/7.x/bottts/svg?seed=Buster",
-    "Bear": "https://api.dicebear.com/7.x/bottts/svg?seed=Bear",
-    "Fox": "https://api.dicebear.com/7.x/bottts/svg?seed=Fox",
-    "Owl": "https://api.dicebear.com/7.x/bottts/svg?seed=Owl"
+    "Panda": "https://api.dicebear.com/7.x/big-smile/svg?seed=Panda",
+    "Lion": "https://api.dicebear.com/7.x/big-smile/svg?seed=Lion",
+    "Rabbit": "https://api.dicebear.com/7.x/big-smile/svg?seed=Rabbit",
+    "Bear": "https://api.dicebear.com/7.x/big-smile/svg?seed=Bear",
+    "Fox": "https://api.dicebear.com/7.x/big-smile/svg?seed=Fox",
+    "Owl": "https://api.dicebear.com/7.x/big-smile/svg?seed=Owl"
 }
 
 # Helper to format content
@@ -122,7 +122,7 @@ def render_quote_card(q, user_id, key_suffix=""):
         </div>
     """, unsafe_allow_html=True)
     
-    # Voting buttons (must be Streamlit native to work)
+    # Voting buttons
     if q["added_by"] != user_id:
         v1, v2, v3 = st.columns([1, 1, 4])
         if v1.button(f"⬆️ {q.get('upvotes', 0)}", key=f"u_{q['_id']}_{key_suffix}", type="primary" if user_vote == "upvote" else "secondary"):
@@ -217,6 +217,7 @@ def render_feed():
     st.markdown(f'<div class="calendar-container"><div class="calendar-header">{calendar.month_name[st.session_state.f_m]} {st.session_state.f_y}</div><div class="calendar-grid">{h_html}{b_html}</div></div>', unsafe_allow_html=True)
 
     featured = get_recommended_quote(user_data["_id"])
+    featured_id = featured["_id"] if featured else None
     if featured:
         st.write("### Top Reflection")
         st.markdown(f"""
@@ -227,8 +228,13 @@ def render_feed():
         </div>
         """, unsafe_allow_html=True)
 
+    st.write("---")
     st.write("### Community Feed")
-    for q in get_quotes(limit=20): render_quote_card(q, user_data["_id"], key_suffix="feed")
+    if st.button("Refresh Feed 🔄"): st.rerun()
+
+    db = get_db()
+    pipeline = [{"$match": {"_id": {"$ne": featured_id}}}, {"$sample": {"size": 10}}]
+    for q in list(db.quotes.aggregate(pipeline)): render_quote_card(q, user_data["_id"], key_suffix="feed")
 
 def render_profile():
     st.title(f"@{user_data['username']} 🌿")
