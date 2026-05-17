@@ -115,12 +115,27 @@ if "_id" not in st.session_state.user:
 # --- Authenticated App UI ---
 user_data = st.session_state.user
 
-# Sidebar Navigation
-page = st.sidebar.radio("Navigation", ["Feed", "My Profile"])
-
-if st.sidebar.button("Logout"):
-    st.session_state.user = None
-    st.rerun()
+# Sidebar Navigation (Custom Modern Look)
+with st.sidebar:
+    st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
+    st.write("")
+    
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "Feed"
+    
+    # Custom Sidebar Buttons
+    if st.button("Explore Feed", key="nav_feed", use_container_width=True, type="primary" if st.session_state.current_page == "Feed" else "secondary"):
+        st.session_state.current_page = "Feed"
+        st.rerun()
+        
+    if st.button("My Profile", key="nav_profile", use_container_width=True, type="primary" if st.session_state.current_page == "My Profile" else "secondary"):
+        st.session_state.current_page = "My Profile"
+        st.rerun()
+        
+    st.divider()
+    if st.button("Logout", use_container_width=True):
+        st.session_state.user = None
+        st.rerun()
 
 # Helper to get current local time
 def get_local_now():
@@ -289,6 +304,15 @@ def format_quote(text):
     text = text.strip()
     return text[0].upper() + text[1:]
 
+# Default Avatar List
+DEFAULT_AVATARS = [
+    "https://api.dicebear.com/7.x/adventurer/svg?seed=Lucky",
+    "https://api.dicebear.com/7.x/adventurer/svg?seed=Bear",
+    "https://api.dicebear.com/7.x/adventurer/svg?seed=Cat",
+    "https://api.dicebear.com/7.x/adventurer/svg?seed=Lion",
+    "https://api.dicebear.com/7.x/adventurer/svg?seed=Panda"
+]
+
 # Custom CSS for Modern "Calm" Look
 st.markdown("""
     <style>
@@ -297,17 +321,38 @@ st.markdown("""
         background-color: #fdfaf6;
     }
     
-    /* Modernized Sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #e4efea !important;
-        width: 250px !important;
+    /* Elegant Modern Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #f0f4f0 !important;
+        border-right: 1px solid #e0eee0;
     }
-    .st-emotion-cache-1ky9v4e {
-        color: #5c8d89 !important;
-        font-weight: 600 !important;
+    [data-testid="stSidebarNav"] {
+        display: none; /* Hide default nav */
+    }
+    .nav-btn {
+        display: block;
+        width: 100%;
+        padding: 12px 20px;
+        margin-bottom: 10px;
+        border-radius: 12px;
+        text-decoration: none;
+        color: #5c8d89;
+        font-weight: 500;
+        transition: all 0.3s;
+        border: none;
+        background: transparent;
+        text-align: left;
+    }
+    .nav-btn:hover {
+        background-color: #d4e2d4;
+    }
+    .nav-btn-active {
+        background-color: #5c8d89 !important;
+        color: white !important;
+        box-shadow: 0 4px 10px rgba(92, 141, 137, 0.2);
     }
     
-    /* Card Styling */
+    /* ... (Previous card styling) ... */
     .highlight-card {
         background-color: #ffffff;
         padding: 24px;
@@ -486,16 +531,28 @@ def render_profile():
     p_col1, p_col2 = st.columns([1, 3])
     with p_col1:
         st.image(user_data["profile_pic"], width=120)
-        # Profile Picture Upload
-        uploaded_file = st.file_uploader("Change Photo", type=["jpg", "png", "jpeg"])
-        if uploaded_file:
-            import base64
-            encoded = base64.b64encode(uploaded_file.read()).decode()
-            photo_url = f"data:image/png;base64,{encoded}"
-            update_user_profile_pic(user_data["_id"], photo_url)
-            st.session_state.user["profile_pic"] = photo_url
-            st.success("Updated!")
-            st.rerun()
+        
+        with st.expander("Change Avatar 🐾"):
+            # 1. Choose from Animal Avatars
+            st.write("Pick an animal mascot:")
+            cols = st.columns(3)
+            for i, av_url in enumerate(DEFAULT_AVATARS):
+                if cols[i % 3].button("🐾", key=f"av_{i}"):
+                    update_user_profile_pic(user_data["_id"], av_url)
+                    st.session_state.user["profile_pic"] = av_url
+                    st.rerun()
+            
+            st.divider()
+            # 2. Manual Upload
+            uploaded_file = st.file_uploader("Or upload your own", type=["jpg", "png", "jpeg"])
+            if uploaded_file:
+                import base64
+                encoded = base64.b64encode(uploaded_file.read()).decode()
+                photo_url = f"data:image/png;base64,{encoded}"
+                update_user_profile_pic(user_data["_id"], photo_url)
+                st.session_state.user["profile_pic"] = photo_url
+                st.success("Updated!")
+                st.rerun()
             
     with p_col2:
         st.write(f"**Verified Highlights:** {len(get_user_quotes(user_data['_id']))}")
@@ -503,11 +560,15 @@ def render_profile():
 
     st.write("---")
     st.write("### My Highlights")
-    for q in get_user_quotes(user_data["_id"]):
-        st.markdown(f'<div class="highlight-card"><div class="highlight-content">"{q["content"]}"</div><div class="highlight-meta"><span class="highlight-title">{q["title"]}</span> by {q["author"]} • ⬆️ {q.get("upvotes", 0)}</div></div>', unsafe_allow_html=True)
+    my_quotes = get_user_quotes(user_data["_id"])
+    if not my_quotes:
+        st.info("You haven't contributed any verified highlights yet.")
+    else:
+        for q in my_quotes:
+            st.markdown(f'<div class="highlight-card"><div class="highlight-content">"{q["content"]}"</div><div class="highlight-meta"><span class="highlight-title">{q["title"]}</span> by {q["author"]} • ⬆️ {q.get("upvotes", 0)}</div></div>', unsafe_allow_html=True)
 
 # Main Router
-if page == "Feed":
+if st.session_state.current_page == "Feed":
     render_feed()
 else:
     render_profile()
