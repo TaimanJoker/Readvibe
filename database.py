@@ -58,6 +58,10 @@ def create_user(google_id, username, email, profile_pic):
     }
     return db.users.insert_one(user)
 
+def update_user_profile_pic(user_id, photo_url):
+    db = get_db()
+    db.users.update_one({"_id": user_id}, {"$set": {"profile_pic": photo_url}})
+
 # --- Machine Learning Helpers ---
 
 _embedding_model = None
@@ -124,36 +128,81 @@ def get_user_quotes(user_id):
 
 # --- Interaction Management ---
 
+def get_user_vote(user_id, quote_id):
+    db = get_db()
+    interaction = db.interactions.find_one({
+        "user_id": user_id, 
+        "quote_id": quote_id, 
+        "action": {"$in": ["upvote", "downvote"]}
+    })
+    return interaction["action"] if interaction else None
+
 def log_interaction(user_id, quote_id, action_type):
     """
     action_type: 'upvote', 'downvote', 'view'
+    Enforces:
+    - No self-voting.
+    - One vote per user (replaces or removes old vote).
     """
     db = get_db()
-    interaction = {
-        "user_id": user_id,
-        "quote_id": quote_id,
-        "action": action_type,
-        "timestamp": datetime.now(timezone.utc)
-    }
-    db.interactions.insert_one(interaction)
     
-    # Update vote counts on the quote if it's a vote
+    # 1. Prevent self-voting
+    quote = db.quotes.find_one({"_id": quote_id})
+    if not quote: return False
+    if quote["added_by"] == user_id:
+        return "self_vote" 
+    
+    # 2. Handle Voting logic (unique per user)
     if action_type in ['upvote', 'downvote']:
+        existing_vote = db.interactions.find_one({
+            "user_id": user_id, 
+            "quote_id": quote_id, 
+            "action": {"$in": ["upvote", "downvote"]}
+        })
+        
+        # If user is clicking the same button twice, remove the vote (toggle off)
+        if existing_vote and existing_vote["action"] == action_type:
+            db.interactions.delete_one({"_id": existing_vote["_id"]})
+            dec_field = "upvotes" if action_type == 'upvote' else "downvotes"
+            net_dec = -1 if action_type == 'upvote' else 1
+            db.quotes.update_one({"_id": quote_id}, {"$inc": {dec_field: -1, "net_votes": net_dec}})
+            db.users.update_one({"_id": quote["added_by"]}, {"$inc": {f"total_{action_type}s_received": -1}})
+            return "removed"
+
+        # If user is changing vote, decrement old one first
+        if existing_vote:
+            old_action = existing_vote["action"]
+            dec_field = "upvotes" if old_action == 'upvote' else "downvotes"
+            net_dec = -1 if old_action == 'upvote' else 1
+            db.quotes.update_one({"_id": quote_id}, {"$inc": {dec_field: -1, "net_votes": net_dec}})
+            db.users.update_one({"_id": quote["added_by"]}, {"$inc": {f"total_{old_action}s_received": -1}})
+            db.interactions.delete_one({"_id": existing_vote["_id"]})
+
+        # Log New Interaction
+        interaction = {
+            "user_id": user_id,
+            "quote_id": quote_id,
+            "action": action_type,
+            "timestamp": datetime.now(timezone.utc)
+        }
+        db.interactions.insert_one(interaction)
+        
+        # Increment new vote counts
         inc_field = "upvotes" if action_type == 'upvote' else "downvotes"
         net_inc = 1 if action_type == 'upvote' else -1
-        
-        quote = db.quotes.find_one_and_update(
-            {"_id": quote_id},
-            {"$inc": {inc_field: 1, "net_votes": net_inc}},
-            return_document=True
-        )
-        
-        # Also update the stats for the user who added the quote
-        if quote:
-            db.users.update_one(
-                {"_id": quote["added_by"]},
-                {"$inc": {f"total_{action_type}s_received": 1}}
-            )
+        db.quotes.update_one({"_id": quote_id}, {"$inc": {inc_field: 1, "net_votes": net_inc}})
+        db.users.update_one({"_id": quote["added_by"]}, {"$inc": {f"total_{action_type}s_received": 1}})
+        return "added"
+    
+    else:
+        # Just a view, log normally
+        db.interactions.insert_one({
+            "user_id": user_id,
+            "quote_id": quote_id,
+            "action": action_type,
+            "timestamp": datetime.now(timezone.utc)
+        })
+        return True
 
 def get_user_activity_dates(user_id):
     db = get_db()
