@@ -18,9 +18,13 @@ env/
 Thumbs.db
 
 # Streamlit
+.streamlit/secrets.toml
 # (Allowing config.toml so the light theme works on deployment)
 
 # mock data
 mock_data.json
 
 questions
+Test_google_login
+
+MEMORY.md

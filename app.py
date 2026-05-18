@@ -138,17 +138,26 @@ def render_quote_card(q, user_id, key_suffix=""):
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Authentication ---
-if 'user' not in st.session_state: st.session_state.user = None
 
 def login():
     st.title("Welcome to Readvibe 🌿")
-    if st.button("Sign in with Google"):
-        mock_user = {"google_id": "mock_google_123", "email": "user@example.com", "profile_pic": DEFAULT_AVATARS["Panda"]}
-        user = get_user_by_google_id(mock_user["google_id"])
-        st.session_state.user = user if user else mock_user
-        st.rerun()
+    if not st.user.is_logged_in:
+        if st.button("Log in with Google"):
+            st.login("google")
+        st.stop()
+    else:
+        # Use email as the unique identifier for Google login
+        db_user = get_user_by_google_id(st.user.email)
+        if db_user:
+            return db_user
+        else:
+            return {
+                "google_id": st.user.email, 
+                "email": st.user.email, 
+                "profile_pic": st.user.picture if hasattr(st.user, 'picture') and st.user.picture else DEFAULT_AVATARS["Panda"]
+            }
 
-def onboarding():
+def onboarding(temp_user):
     st.title("Join the Community 🌿")
     with st.form("onboarding"):
         username = st.text_input("Username")
@@ -159,29 +168,35 @@ def onboarding():
             content = format_quote(content)
             if username and content and not get_user_by_username(username) and not quote_exists(content):
                 with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
-                user_res = create_user(st.session_state.user["google_id"], username, st.session_state.user["email"], st.session_state.user["profile_pic"])
-                save_quote(content, ai_res["title"], ai_res["author"], user_res.inserted_id, is_verified=ai_res["verified"])
-                st.session_state.user = get_user_by_google_id(st.session_state.user["google_id"])
+                user_res = create_user(temp_user["google_id"], username, temp_user["email"], temp_user["profile_pic"])
+                save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_res.inserted_id, is_verified=ai_res.get("verified", False))
                 st.rerun()
+    if st.button("Log out"):
+        st.logout()
 
-if st.session_state.user is None: login(); st.stop()
-if "_id" not in st.session_state.user: onboarding(); st.stop()
-user_data = st.session_state.user
+user_data = login()
+if user_data and "_id" not in user_data:
+    onboarding(user_data)
+    st.stop()
+elif not user_data:
+    st.stop()
 
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
     with st.expander("🛠️ Debug Tools"):
-        if st.button("User: Taiman"): st.session_state.user = get_user_by_google_id("mock_google_123"); st.rerun()
-        if st.button("User: Sarah"):
-            sarah = get_user_by_google_id("mock_google_sarah")
-            st.session_state.user = sarah if sarah else {"google_id": "mock_google_sarah", "email": "sarah@test.com", "profile_pic": DEFAULT_AVATARS["Cat"]}
+        if st.button("User: Taiman"): 
+            st.session_state.user_data_override = get_user_by_google_id("mock_google_123")
             st.rerun()
+    if 'user_data_override' in st.session_state:
+        user_data = st.session_state.user_data_override
+    
     if 'page' not in st.session_state: st.session_state.page = "Feed"
     if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.page == "Feed" else "secondary"): st.session_state.page = "Feed"; st.rerun()
     if st.button("My Profile", use_container_width=True, type="primary" if st.session_state.page == "My Profile" else "secondary"): st.session_state.page = "My Profile"; st.rerun()
     st.divider()
-    if st.button("Logout", use_container_width=True): st.session_state.user = None; st.rerun()
+    if st.button("Logout", use_container_width=True): 
+        st.logout()
 
 # --- Pages ---
 def render_feed():
