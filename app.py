@@ -141,7 +141,7 @@ def render_quote_card(q, user_id, key_suffix=""):
 
 def login():
     st.title("Welcome to Readvibe 🌿")
-    if not st.user.is_logged_in:
+    if not st.user:
         if st.button("Log in with Google"):
             st.login("google")
         st.stop()
@@ -154,7 +154,7 @@ def login():
             return {
                 "google_id": st.user.email, 
                 "email": st.user.email, 
-                "profile_pic": st.user.picture if hasattr(st.user, 'picture') and st.user.picture else DEFAULT_AVATARS["Panda"]
+                "profile_pic": st.user.get('picture') or DEFAULT_AVATARS["Panda"]
             }
 
 def onboarding(temp_user):
