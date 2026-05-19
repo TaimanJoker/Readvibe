@@ -5,8 +5,9 @@ st.set_page_config(page_title="OAuth Minimal Test")
 st.title("Minimal Google Login Test")
 st.write("This is a clean, isolated environment to test Streamlit's native Google OAuth.")
 
-# Simple dictionary check to see if user is logged in
-if not st.user:
+# Use get to safely check if they are logged in.
+# Streamlit injects "is_logged_in" into the dictionary when secrets are properly configured.
+if not st.user.get("is_logged_in", False):
     st.warning("You are currently logged out.")
     if st.button("Log in with Google"):
         st.login("google")
