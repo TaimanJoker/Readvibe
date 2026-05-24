@@ -273,13 +273,28 @@ def render_feed():
     featured_id = featured["_id"] if featured else None
     if featured:
         st.write("### Top Reflection")
+        verified_tag = ' <span style="opacity: 0.8; font-size: 0.8rem; margin-left: 8px;">✓ verified</span>' if featured.get("is_verified") else ""
         st.markdown(f"""
         <div class="featured-container">
             <div class="featured-badge">Highly Recommended</div>
             <div class="featured-content">"{featured["content"]}"</div>
-            <div class="featured-meta">— {featured["title"]} by {featured["author"]}</div>
+            <div class="featured-meta">— {featured["title"]} by {featured["author"]}{verified_tag}</div>
         </div>
         """, unsafe_allow_html=True)
+        
+        if featured["added_by"] != user_data["_id"]:
+            f_vote = get_user_vote(user_data["_id"], featured_id)
+            fv1, fv2, fv3 = st.columns([1, 1, 4])
+            if fv1.button(f"⬆️ {featured.get('upvotes', 0)}", key=f"u_{featured_id}_feat", type="primary" if f_vote == "upvote" else "secondary"):
+                log_interaction(user_data["_id"], featured_id, "upvote")
+                st.session_state.pop('featured_quote', None)
+                st.rerun()
+            if fv2.button(f"⬇️ {featured.get('downvotes', 0)}", key=f"d_{featured_id}_feat", type="primary" if f_vote == "downvote" else "secondary"):
+                log_interaction(user_data["_id"], featured_id, "downvote")
+                st.session_state.pop('featured_quote', None)
+                st.rerun()
+        else:
+            st.caption(f"✨ Your contribution • ⬆️ {featured.get('upvotes', 0)} ⬇️ {featured.get('downvotes', 0)}")
 
     st.write("---")
     st.write("### Community Feed")
@@ -302,7 +317,13 @@ def render_profile():
         st.image(user_data["profile_pic"], width=120)
         # Removed manual avatar selection since Google profile pictures are used
     with p2:
-        st.write(f"**Verified Highlights:** {len([q for q in get_user_quotes(user_data['_id']) if q.get('is_verified')])}")
+        verified_count = len([q for q in get_user_quotes(user_data['_id']) if q.get('is_verified')])
+        cred = "🌱 Seedling"
+        if verified_count >= 1: cred = "🌿 Contributor"
+        if verified_count >= 5: cred = "🌳 Trusted Scholar"
+        if verified_count >= 10: cred = "👑 Oracle"
+        st.write(f"**Credibility Level:** {cred}")
+        st.write(f"**Verified Highlights:** {verified_count}")
         st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)}")
     st.write("---"); st.write("### My Highlights")
     for q in get_user_quotes(user_data["_id"]): render_quote_card(q, user_data["_id"], key_suffix="prof")
