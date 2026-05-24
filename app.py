@@ -205,9 +205,9 @@ def onboarding(temp_user):
                 user_res = create_user(temp_user["google_id"], username, temp_user["email"], temp_user["profile_pic"])
                 save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_res.inserted_id, is_verified=ai_res.get("verified", False))
                 if ai_res.get("verified"):
-                    st.success("✓ AI Verified your quote!")
+                    st.session_state['notification'] = ('success', "✓ AI Verified your quote!")
                 else:
-                    st.warning(f"Quote added, but not verified: {ai_res.get('reason', 'AI check failed.')}")
+                    st.session_state['notification'] = ('warning', f"Quote added, but not verified: {ai_res.get('reason', 'AI check failed.')}")
                 st.rerun()
     if st.button("Log out"):
         st.logout()
@@ -219,6 +219,11 @@ if user_data and "_id" not in user_data:
 elif not user_data:
     st.stop()
 
+if 'notification' in st.session_state:
+    msg_type, msg = st.session_state.pop('notification')
+    if msg_type == 'success': st.success(msg)
+    else: st.warning(msg)
+
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
@@ -229,7 +234,7 @@ with st.sidebar:
                 st.rerun()
         if 'user_data_override' in st.session_state:
             user_data = st.session_state.user_data_override
-    
+
     if 'page' not in st.session_state: st.session_state.page = "Feed"
     if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.page == "Feed" else "secondary"): st.session_state.page = "Feed"; st.rerun()
     if st.button("My Profile", use_container_width=True, type="primary" if st.session_state.page == "My Profile" else "secondary"): st.session_state.page = "My Profile"; st.rerun()
@@ -250,9 +255,9 @@ def render_feed():
                     with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
                     save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_data["_id"], is_verified=ai_res.get("verified", False))
                     if ai_res.get("verified"):
-                        st.success("✓ Shared and AI Verified!")
+                        st.session_state['notification'] = ('success', "✓ Shared and AI Verified!")
                     else:
-                        st.warning(f"Shared! Note: {ai_res.get('reason', 'AI verification failed.')}")
+                        st.session_state['notification'] = ('warning', f"Shared! Note: {ai_res.get('reason', 'AI verification failed.')}")
                     st.rerun()
 
     st.write("### Consistency Tracker")

@@ -45,9 +45,9 @@ def _try_model(model_name, content, title, author):
         Author: "{author}"
         
         RULES:
-        1. If you cannot find the EXACT verbatim quote in a published book, movie, or historical record, "verified" MUST be false.
-        2. If title/author are generic (e.g., "Anonymous", "Untitled", "Internet"), "verified" MUST be false unless it's a world-famous proverb you can specifically source.
-        3. Accuracy is #1 priority. Do not guess.
+        1. If the quote is accurately attributed to a published book, movie, or historical figure, "verified" MUST be true. Minor punctuation/word differences are acceptable.
+        2. If title/author are generic (e.g., "Anonymous", "Internet") but you know the exact correct source, fill them in and set "verified" to true.
+        3. If it is completely fake, hallucinated, or wrongly attributed, set "verified" to false and explain why in "reason".
         
         Format: Respond ONLY in JSON.
         {{ "verified": boolean, "reason": "friendly text", "title": "string", "author": "string" }}
