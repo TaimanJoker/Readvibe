@@ -10,8 +10,8 @@ def verify_quote_with_ai(content, title, author):
     genai.configure(api_key=api_key)
     friendly_prefix = "We couldn't verify this quote right now. 🌿"
 
-    # Updated based on diagnostics: Your account has 2.0 and 2.5
-    models_to_try = ['models/gemini-2.5-flash', 'models/gemini-2.0-flash']
+    # Try models starting from newest to oldest stable
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
 
     # 1. Try hardcoded preferred models
     for model_name in models_to_try:

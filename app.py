@@ -204,6 +204,10 @@ def onboarding(temp_user):
                 with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
                 user_res = create_user(temp_user["google_id"], username, temp_user["email"], temp_user["profile_pic"])
                 save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_res.inserted_id, is_verified=ai_res.get("verified", False))
+                if ai_res.get("verified"):
+                    st.success("✓ AI Verified your quote!")
+                else:
+                    st.warning(f"Quote added, but not verified: {ai_res.get('reason', 'AI check failed.')}")
                 st.rerun()
     if st.button("Log out"):
         st.logout()
@@ -245,7 +249,11 @@ def render_feed():
                 if content and not quote_exists(content):
                     with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
                     save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_data["_id"], is_verified=ai_res.get("verified", False))
-                    st.success("Shared!"); st.rerun()
+                    if ai_res.get("verified"):
+                        st.success("✓ Shared and AI Verified!")
+                    else:
+                        st.warning(f"Shared! Note: {ai_res.get('reason', 'AI verification failed.')}")
+                    st.rerun()
 
     st.write("### Consistency Tracker")
     activity = get_user_activity_dates(user_data["_id"])
@@ -325,6 +333,15 @@ def render_profile():
         st.write(f"**Credibility Level:** {cred}")
         st.write(f"**Verified Highlights:** {verified_count}")
         st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)}")
+        
+        with st.expander("ℹ️ How to level up?"):
+            st.markdown("""
+            Your Credibility Level increases as you share quotes that the AI can explicitly verify from books or movies.
+            * 🌱 **Seedling**: 0 verified quotes
+            * 🌿 **Contributor**: 1+ verified quotes
+            * 🌳 **Trusted Scholar**: 5+ verified quotes
+            * 👑 **Oracle**: 10+ verified quotes
+            """)
     st.write("---"); st.write("### My Highlights")
     for q in get_user_quotes(user_data["_id"]): render_quote_card(q, user_data["_id"], key_suffix="prof")
 
