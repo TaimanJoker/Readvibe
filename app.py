@@ -218,12 +218,13 @@ elif not user_data:
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
-    with st.expander("🛠️ Debug Tools"):
-        if st.button("User: Taiman"): 
-            st.session_state.user_data_override = get_user_by_google_id("mock_google_123")
-            st.rerun()
-    if 'user_data_override' in st.session_state:
-        user_data = st.session_state.user_data_override
+    if user_data.get("email") == "phankawee.tai@gmail.com":
+        with st.expander("🛠️ Debug Tools"):
+            if st.button("User: Taiman"): 
+                st.session_state.user_data_override = get_user_by_username("Taiman")
+                st.rerun()
+        if 'user_data_override' in st.session_state:
+            user_data = st.session_state.user_data_override
     
     if 'page' not in st.session_state: st.session_state.page = "Feed"
     if st.button("Explore Feed", use_container_width=True, type="primary" if st.session_state.page == "Feed" else "secondary"): st.session_state.page = "Feed"; st.rerun()
@@ -299,10 +300,7 @@ def render_profile():
     p1, p2 = st.columns([1, 3])
     with p1:
         st.image(user_data["profile_pic"], width=120)
-        with st.expander("Avatar 🐾"):
-            for name, url in DEFAULT_AVATARS.items():
-                if st.button(name, key=f"av_{name}", use_container_width=True):
-                    update_user_profile_pic(user_data["_id"], url); st.session_state.user["profile_pic"] = url; st.rerun()
+        # Removed manual avatar selection since Google profile pictures are used
     with p2:
         st.write(f"**Verified Highlights:** {len([q for q in get_user_quotes(user_data['_id']) if q.get('is_verified')])}")
         st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)}")
