@@ -327,14 +327,40 @@ def render_profile():
     st.title(f"@{user_data['username']} 🌿")
     p1, p2 = st.columns([1, 3])
     with p1:
-        st.image(user_data["profile_pic"], width=120)
-        # Removed manual avatar selection since Google profile pictures are used
+        pic_src = user_data.get("profile_pic", "")
+        if pic_src.startswith("data:image"):
+            import base64
+            try:
+                b64 = pic_src.split(",")[1]
+                st.image(base64.b64decode(b64), width=120)
+            except:
+                st.image(pic_src, width=120)
+        else:
+            st.image(pic_src, width=120)
+            
+        uploaded_file = st.file_uploader("Change Avatar", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+        if uploaded_file is not None:
+            import base64
+            from PIL import Image
+            from io import BytesIO
+            img = Image.open(uploaded_file)
+            img.thumbnail((200, 200))
+            buffer = BytesIO()
+            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+            img.save(buffer, format="JPEG")
+            b64_str = base64.b64encode(buffer.getvalue()).decode()
+            new_pic = f"data:image/jpeg;base64,{b64_str}"
+            update_user_profile_pic(user_data["_id"], new_pic)
+            if 'user_data_override' in st.session_state:
+                st.session_state.user_data_override["profile_pic"] = new_pic
+            st.rerun()
     with p2:
         verified_count = len([q for q in get_user_quotes(user_data['_id']) if q.get('is_verified')])
         cred = "🌱 Seedling"
         if verified_count >= 1: cred = "🌿 Contributor"
         if verified_count >= 5: cred = "🌳 Trusted Scholar"
         if verified_count >= 10: cred = "👑 Oracle"
+        if verified_count >= 100: cred = "🌌 Ascendant"
         st.write(f"**Credibility Level:** {cred}")
         st.write(f"**Verified Highlights:** {verified_count}")
         st.write(f"**Impact:** ⬆️ {user_data.get('total_upvotes_received', 0)}")
@@ -346,6 +372,7 @@ def render_profile():
             * 🌿 **Contributor**: 1+ verified quotes
             * 🌳 **Trusted Scholar**: 5+ verified quotes
             * 👑 **Oracle**: 10+ verified quotes
+            * 🌌 **Ascendant**: 100+ verified quotes
             """)
     st.write("---"); st.write("### My Highlights")
     for q in get_user_quotes(user_data["_id"]): render_quote_card(q, user_data["_id"], key_suffix="prof")
