@@ -232,6 +232,15 @@ with st.sidebar:
             if st.button("User: Taiman"): 
                 st.session_state.user_data_override = get_user_by_username("Taiman")
                 st.rerun()
+            if st.button("Train ML Model (Batch)"):
+                with st.spinner("Training models..."):
+                    from ml_pipeline import train_pipeline
+                    success = train_pipeline()
+                    if success:
+                        st.session_state['notification'] = ('success', "ML Pipeline Trained Successfully!")
+                    else:
+                        st.session_state['notification'] = ('warning', "Not enough data to train ML models yet.")
+                    st.rerun()
         if 'user_data_override' in st.session_state:
             user_data = st.session_state.user_data_override
 

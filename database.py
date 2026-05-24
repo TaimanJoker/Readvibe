@@ -253,40 +253,93 @@ def get_user_activity_dates(user_id):
 
 def get_recommended_quote(user_id):
     db = get_db()
+    MODEL_DIR = "models"
+    from bson.objectid import ObjectId
     
-    # 1. Find user's latest upvote (only verified)
-    last_upvote = db.interactions.find_one(
-        {"user_id": user_id, "action": "upvote"},
-        sort=[("timestamp", -1)]
-    )
-    
-    # Fallback to most popular VERIFIED
-    fallback = db.quotes.find_one({"is_verified": True}, sort=[("net_votes", -1)])
-    
-    if not last_upvote:
-        return fallback
-    
-    seed_quote = db.quotes.find_one({"_id": last_upvote["quote_id"]})
-    if not seed_quote or not seed_quote.get("embedding"):
-        return fallback
-    
-    # 2. Find similar quotes (only verified)
-    all_quotes = list(db.quotes.find({"_id": {"$ne": seed_quote["_id"]}, "is_verified": True}))
-    
-    if not all_quotes: return seed_quote
-    
-    from sklearn.metrics.pairwise import cosine_similarity
+    # Fallback if no models trained yet
+    if not os.path.exists(os.path.join(MODEL_DIR, "ranker.pkl")):
+        return db.quotes.find_one({"is_verified": True}, sort=[("net_votes", -1)])
+
+    import joblib
     import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
     
-    try:
-        seed_vec = np.array(seed_quote["embedding"]).reshape(1, -1)
-        eligible = [q for q in all_quotes if q.get("embedding")]
-        if not eligible: return fallback
+    # 1. Load Models safely
+    cf_knn = joblib.load(os.path.join(MODEL_DIR, "cf_knn.pkl")) if os.path.exists(os.path.join(MODEL_DIR, "cf_knn.pkl")) else None
+    user_item_matrix = joblib.load(os.path.join(MODEL_DIR, "user_item_matrix.pkl")) if os.path.exists(os.path.join(MODEL_DIR, "user_item_matrix.pkl")) else None
+    cbf_knn = joblib.load(os.path.join(MODEL_DIR, "cbf_knn.pkl")) if os.path.exists(os.path.join(MODEL_DIR, "cbf_knn.pkl")) else None
+    quote_ids = joblib.load(os.path.join(MODEL_DIR, "quote_ids.pkl")) if os.path.exists(os.path.join(MODEL_DIR, "quote_ids.pkl")) else []
+    embeddings = joblib.load(os.path.join(MODEL_DIR, "embeddings.pkl")) if os.path.exists(os.path.join(MODEL_DIR, "embeddings.pkl")) else None
+    ranker = joblib.load(os.path.join(MODEL_DIR, "ranker.pkl"))
+    top_pop_ids = joblib.load(os.path.join(MODEL_DIR, "top_pop.pkl")) if os.path.exists(os.path.join(MODEL_DIR, "top_pop.pkl")) else []
+
+    # Get user interaction history to filter read quotes
+    user_interactions = list(db.interactions.find({"user_id": user_id}))
+    read_quote_ids = [str(x["quote_id"]) for x in user_interactions]
+    user_upvotes = [str(x["quote_id"]) for x in user_interactions if x["action"] == "upvote"]
+    
+    # --- STAGE 1: Candidate Generation ---
+    candidates = set()
+    
+    # A. Collaborative Candidates
+    if cf_knn and user_item_matrix is not None and str(user_id) in user_item_matrix.index:
+        user_idx = user_item_matrix.index.get_loc(str(user_id))
+        distances, indices = cf_knn.kneighbors(user_item_matrix.iloc[user_idx].values.reshape(1, -1))
+        sim_users = user_item_matrix.index[indices[0][1:]]
+        for su in sim_users:
+            su_upvotes = user_item_matrix.loc[su]
+            candidates.update(su_upvotes[su_upvotes == 1].index.tolist())
+            
+    # B. Content-Based Candidates
+    if cbf_knn and embeddings is not None and user_upvotes:
+        past_idx = [quote_ids.index(pid) for pid in user_upvotes if pid in quote_ids]
+        if past_idx:
+            past_embs = embeddings[past_idx]
+            distances, indices = cbf_knn.kneighbors(past_embs, n_neighbors=min(5, len(embeddings)))
+            for neighbor_list in indices:
+                for idx in neighbor_list: candidates.add(quote_ids[idx])
+                    
+    # C. TopPop Candidates
+    for t_id in top_pop_ids[:20]: candidates.add(t_id)
         
-        other_vecs = np.array([q["embedding"] for q in eligible])
-        similarities = cosine_similarity(seed_vec, other_vecs)[0]
-        best_idx = np.argmax(similarities)
+    candidates = list(candidates - set(read_quote_ids))
+    
+    # Fallback if pool is exhausted
+    if not candidates:
+        fallback = db.quotes.find_one({"is_verified": True, "_id": {"$nin": [ObjectId(qid) for qid in read_quote_ids if len(qid)==24]}}, sort=[("net_votes", -1)])
+        return fallback if fallback else db.quotes.find_one({"is_verified": True}, sort=[("net_votes", -1)])
+
+    # --- STAGE 2: Heavy Ranking (Logistic Regression) ---
+    X_pred = []
+    valid_candidates = []
+    
+    for q_id in candidates:
+        cf_score = 0
+        if user_item_matrix is not None and str(user_id) in user_item_matrix.index and q_id in user_item_matrix.columns:
+            user_idx = user_item_matrix.index.get_loc(str(user_id))
+            distances, indices = cf_knn.kneighbors(user_item_matrix.iloc[user_idx].values.reshape(1, -1))
+            sim_users = user_item_matrix.index[indices[0][1:]]
+            if len(sim_users) > 0: cf_score = user_item_matrix.loc[sim_users, q_id].mean()
+                
+        cbf_score = 0
+        if embeddings is not None and user_upvotes and q_id in quote_ids:
+            q_idx = quote_ids.index(q_id)
+            target_emb = embeddings[q_idx].reshape(1, -1)
+            past_idx = [quote_ids.index(pid) for pid in user_upvotes if pid in quote_ids]
+            if past_idx:
+                past_embs = embeddings[past_idx]
+                sims = cosine_similarity(target_emb, past_embs)
+                cbf_score = sims.max()
+                
+        X_pred.append([cf_score, cbf_score])
+        valid_candidates.append(q_id)
         
-        return eligible[best_idx]
-    except:
-        return fallback
+    X_pred = np.array(X_pred)
+    
+    if hasattr(ranker, "predict_proba"): scores = ranker.predict_proba(X_pred)[:, 1]
+    else: scores = ranker.decision_function(X_pred)
+        
+    best_idx = np.argmax(scores)
+    best_q_id = valid_candidates[best_idx]
+    
+    return db.quotes.find_one({"_id": ObjectId(best_q_id)})
