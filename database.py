@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient, ASCENDING
+from pymongo.errors import OperationFailure
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -41,7 +42,14 @@ def init_db():
     # Ensure uniqueness on username
     db.users.create_index([("username", ASCENDING)], unique=True)
     # Index for OAuth IDs (must be sparse so that users without google_id don't trigger duplicates)
-    db.users.create_index([("google_id", ASCENDING)], unique=True, sparse=True)
+    try:
+        db.users.create_index([("google_id", ASCENDING)], unique=True, sparse=True)
+    except OperationFailure:
+        try:
+            db.users.drop_index("google_id_1")
+            db.users.create_index([("google_id", ASCENDING)], unique=True, sparse=True)
+        except Exception as e:
+            print(f"Warning: Could not recreate google_id index: {e}")
 
 # --- User Management ---
 
