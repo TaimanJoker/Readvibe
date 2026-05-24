@@ -194,7 +194,13 @@ def onboarding(temp_user):
         title, author = col1.text_input("Title"), col2.text_input("Author")
         if st.form_submit_button("Join"):
             content = format_quote(content)
-            if username and content and not get_user_by_username(username) and not quote_exists(content):
+            if not username or not content:
+                st.error("Please provide both a username and a quote.")
+            elif get_user_by_username(username):
+                st.error("That username is already taken! Please choose another one.")
+            elif quote_exists(content):
+                st.error("That quote already exists in our community! Please share a different one.")
+            else:
                 with st.spinner("AI checking..."): ai_res = verify_quote_with_ai(content, title, author)
                 user_res = create_user(temp_user["google_id"], username, temp_user["email"], temp_user["profile_pic"])
                 save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_res.inserted_id, is_verified=ai_res.get("verified", False))
