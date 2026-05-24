@@ -127,9 +127,13 @@ def render_quote_card(q, user_id, key_suffix=""):
         v1, v2, v3 = st.columns([1, 1, 4])
         if v1.button(f"⬆️ {q.get('upvotes', 0)}", key=f"u_{q['_id']}_{key_suffix}", type="primary" if user_vote == "upvote" else "secondary"):
             log_interaction(user_id, q["_id"], "upvote")
+            st.session_state.pop('featured_quote', None)
+            refresh_feed_quotes_from_db()
             st.rerun()
         if v2.button(f"⬇️ {q.get('downvotes', 0)}", key=f"d_{q['_id']}_{key_suffix}", type="primary" if user_vote == "downvote" else "secondary"):
             log_interaction(user_id, q["_id"], "downvote")
+            st.session_state.pop('featured_quote', None)
+            refresh_feed_quotes_from_db()
             st.rerun()
     else:
         st.caption(f"✨ Your contribution • ⬆️ {q.get('upvotes', 0)} ⬇️ {q.get('downvotes', 0)}")
@@ -137,24 +141,48 @@ def render_quote_card(q, user_id, key_suffix=""):
     # Closing white block
     st.markdown("</div>", unsafe_allow_html=True)
 
+def refresh_feed_quotes_from_db():
+    if 'feed_quotes' in st.session_state and st.session_state.feed_quotes:
+        db = get_db()
+        ids = [q["_id"] for q in st.session_state.feed_quotes]
+        # Fetch current state of these quotes
+        updated_quotes = {q["_id"]: q for q in db.quotes.find({"_id": {"$in": ids}})}
+        # Maintain the original order
+        st.session_state.feed_quotes = [updated_quotes[q_id] for q_id in ids if q_id in updated_quotes]
+
 # --- Authentication ---
 
 def login():
     st.title("Welcome to Readvibe 🌿")
-    if not st.user:
-        if st.button("Log in with Google"):
+    
+    is_logged_in = False
+    if st.user:
+        is_logged_in = getattr(st.user, "is_logged_in", False) or (isinstance(st.user, dict) and st.user.get("is_logged_in", False))
+
+    if not is_logged_in:
+        st.markdown('<div style="text-align: center; margin-top: 50px;">', unsafe_allow_html=True)
+        if st.button("Log in with Google", type="primary", use_container_width=True):
             st.login("google")
+        st.markdown('</div>', unsafe_allow_html=True)
         st.stop()
     else:
         # Use email as the unique identifier for Google login
-        db_user = get_user_by_google_id(st.user.email)
+        email = getattr(st.user, "email", None) or (isinstance(st.user, dict) and st.user.get("email"))
+        if not email:
+            st.error("Could not retrieve your Google email. Please try logging in again.")
+            if st.button("Log out"):
+                st.logout()
+            st.stop()
+            
+        db_user = get_user_by_google_id(email)
         if db_user:
             return db_user
         else:
+            picture = getattr(st.user, "picture", None) or (isinstance(st.user, dict) and st.user.get("picture"))
             return {
-                "google_id": st.user.email, 
-                "email": st.user.email, 
-                "profile_pic": st.user.get('picture') or DEFAULT_AVATARS["Panda"]
+                "google_id": email, 
+                "email": email, 
+                "profile_pic": picture or DEFAULT_AVATARS["Panda"]
             }
 
 def onboarding(temp_user):
@@ -231,7 +259,10 @@ def render_feed():
                 b_html += f'<div class="calendar-day {"day-active" if d_str in activity else ""}">{day}</div>'
     st.markdown(f'<div class="calendar-container"><div class="calendar-header">{calendar.month_name[st.session_state.f_m]} {st.session_state.f_y}</div><div class="calendar-grid">{h_html}{b_html}</div></div>', unsafe_allow_html=True)
 
-    featured = get_recommended_quote(user_data["_id"])
+    if 'featured_quote' not in st.session_state:
+        st.session_state.featured_quote = get_recommended_quote(user_data["_id"])
+    
+    featured = st.session_state.featured_quote
     featured_id = featured["_id"] if featured else None
     if featured:
         st.write("### Top Reflection")
@@ -245,11 +276,17 @@ def render_feed():
 
     st.write("---")
     st.write("### Community Feed")
-    if st.button("Refresh Feed 🔄"): st.rerun()
+    if st.button("Refresh Feed 🔄"): 
+        st.session_state.pop('feed_quotes', None)
+        st.rerun()
 
-    db = get_db()
-    pipeline = [{"$match": {"_id": {"$ne": featured_id}}}, {"$sample": {"size": 10}}]
-    for q in list(db.quotes.aggregate(pipeline)): render_quote_card(q, user_data["_id"], key_suffix="feed")
+    if 'feed_quotes' not in st.session_state:
+        db = get_db()
+        pipeline = [{"$match": {"_id": {"$ne": featured_id}}}, {"$sample": {"size": 10}}]
+        st.session_state.feed_quotes = list(db.quotes.aggregate(pipeline))
+
+    for q in st.session_state.feed_quotes:
+        render_quote_card(q, user_data["_id"], key_suffix="feed")
 
 def render_profile():
     st.title(f"@{user_data['username']} 🌿")

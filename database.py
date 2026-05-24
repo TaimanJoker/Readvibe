@@ -17,14 +17,22 @@ def get_secret(key, default=None):
     return os.getenv(key, default)
 
 MONGODB_URI = get_secret("MONGODB_URI")
-TZ_OFFSET = int(get_secret("TIMEZONE_OFFSET", 0))
+try:
+    TZ_OFFSET = int(get_secret("TIMEZONE_OFFSET", 0))
+except (ValueError, TypeError):
+    TZ_OFFSET = 0
+
 DB_NAME = "readvibe_v2" # Using v2 database name to avoid conflict during dev
 
+_mongo_client = None
+
 def get_db():
+    global _mongo_client
     if not MONGODB_URI:
         raise ValueError("MONGODB_URI not found")
-    client = MongoClient(MONGODB_URI)
-    return client[DB_NAME]
+    if _mongo_client is None:
+        _mongo_client = MongoClient(MONGODB_URI)
+    return _mongo_client[DB_NAME]
 
 def init_db():
     db = get_db()
@@ -32,14 +40,20 @@ def init_db():
     db.quotes.create_index([("content", ASCENDING)], unique=True)
     # Ensure uniqueness on username
     db.users.create_index([("username", ASCENDING)], unique=True)
-    # Index for OAuth IDs
-    db.users.create_index([("google_id", ASCENDING)], unique=True)
+    # Index for OAuth IDs (must be sparse so that users without google_id don't trigger duplicates)
+    db.users.create_index([("google_id", ASCENDING)], unique=True, sparse=True)
 
 # --- User Management ---
 
 def get_user_by_google_id(google_id):
     db = get_db()
-    return db.users.find_one({"google_id": google_id})
+    # Support looking up mock users whose google_id was set to their email, or normal google_id
+    return db.users.find_one({
+        "$or": [
+            {"google_id": google_id},
+            {"email": google_id}
+        ]
+    })
 
 def get_user_by_username(username):
     db = get_db()
