@@ -1,6 +1,6 @@
 # Readvibe 🌿
 
-🌐 **Live Application:** [Join the Community Here!](https://readvibe.streamlit.app)
+🌐 **Live Application:** [Join the Community Here!](https://readvibe-fqkekiwbfhb3qxv6ftpgm9.streamlit.app/)
 
 Readvibe is a community-driven, AI-verified social platform designed for sharing, discovering, and discussing inspiring quotes, reflections, and highlights from books, movies, and historical figures. 
 
