@@ -47,12 +47,12 @@ def train_pipeline():
         
     print(f"Data fetched: {len(df_inter)} interactions, {len(df_quotes)} verified quotes.")
     
-    # --- 1. TopPop Fallback (COSC2670) ---
+    # --- 1. TopPop Fallback ---
     print("Caching TopPop Baseline...")
     top_pop_ids = df_inter[df_inter['rating'] == 1]['quote_id'].value_counts().index.tolist()
     joblib.dump(top_pop_ids, os.path.join(MODEL_DIR, "top_pop.pkl"))
 
-    # --- 2. Collaborative Filtering / User-User KNN (MATH2319 / COSC2670) ---
+    # --- 2. Collaborative Filtering / User-User KNN ---
     print("Training CF KNN Model...")
     user_item_matrix = df_inter.pivot_table(index='user_id', columns='quote_id', values='rating').fillna(0)
     
@@ -64,7 +64,7 @@ def train_pipeline():
         joblib.dump(cf_knn, os.path.join(MODEL_DIR, "cf_knn.pkl"))
         joblib.dump(user_item_matrix, os.path.join(MODEL_DIR, "user_item_matrix.pkl"))
     
-    # --- 3. Content-Based Filtering / Item-Item KNN (MATH2319) ---
+    # --- 3. Content-Based Filtering / Item-Item KNN ---
     print("Training CBF KNN Model...")
     embeddings = np.array(df_quotes['embedding'].tolist())
     quote_ids = df_quotes.index.tolist()
@@ -77,7 +77,7 @@ def train_pipeline():
         joblib.dump(quote_ids, os.path.join(MODEL_DIR, "quote_ids.pkl"))
         joblib.dump(embeddings, os.path.join(MODEL_DIR, "embeddings.pkl"))
 
-    # --- 4. Ranker / Logistic Regression (MATH2319) ---
+    # --- 4. Ranker / Logistic Regression ---
     print("Training Logistic Regression Ranker via Cross-Validation...")
     X = []
     y = []

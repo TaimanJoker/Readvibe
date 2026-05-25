@@ -106,7 +106,7 @@ def quote_exists(content):
     db = get_db()
     return db.quotes.find_one({"content": content}) is not None
 
-def save_quote(content, title, author, user_id, tags=None, is_verified=False):
+def save_quote(content, title, author, user_id, is_verified=False):
     db = get_db()
     
     # Generate Embedding for ML
@@ -120,7 +120,6 @@ def save_quote(content, title, author, user_id, tags=None, is_verified=False):
         "content": content,
         "title": title or "Untitled",
         "author": author or "Unknown",
-        "tags": tags or [],
         "added_by": user_id,
         "created_at": datetime.now(timezone.utc),
         "embedding": embedding,
@@ -139,8 +138,7 @@ def get_quotes(search_query=None, limit=20, skip=0):
             "$or": [
                 {"content": {"$regex": search_query, "$options": "i"}},
                 {"title": {"$regex": search_query, "$options": "i"}},
-                {"author": {"$regex": search_query, "$options": "i"}},
-                {"tags": {"$regex": search_query, "$options": "i"}}
+                {"author": {"$regex": search_query, "$options": "i"}}
             ]
         }
     return list(db.quotes.find(query).sort("created_at", -1).skip(skip).limit(limit))
