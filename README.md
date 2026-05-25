@@ -1,5 +1,7 @@
 # Readvibe 🌿
 
+🌐 **Live Application:** [Join the Community Here!](https://readvibe.streamlit.app)
+
 Readvibe is a community-driven, AI-verified social platform designed for sharing, discovering, and discussing inspiring quotes, reflections, and highlights from books, movies, and historical figures. 
 
 Built with a meritocratic, anonymized feed in mind, Readvibe eliminates the "echo chamber" and "influencer bias" of traditional social media. Instead, it leverages a custom Hybrid Machine Learning Recommendation Engine to surface the most semantically relevant and community-validated thoughts directly to you.
