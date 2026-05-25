@@ -16,6 +16,19 @@ from ai_agent import verify_quote_with_ai
 # Initialize Database Indexes
 init_db()
 
+import time
+@st.cache_resource(ttl=timedelta(days=7))
+def scheduled_ml_training():
+    try:
+        from ml_pipeline import train_pipeline
+        train_pipeline()
+    except Exception as e:
+        print(f"Scheduled ML training failed: {e}")
+    return time.time()
+
+# Automatically train ML models weekly in the background
+scheduled_ml_training()
+
 st.set_page_config(
     page_title="Readvibe 🌿",
     page_icon="🌿",
