@@ -219,6 +219,7 @@ def onboarding(temp_user):
                 save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_res.inserted_id, is_verified=ai_res.get("verified", False))
                 if ai_res.get("verified"):
                     st.session_state['notification'] = ('success', "✓ AI Verified your quote!")
+                    st.session_state['show_balloons'] = True
                 else:
                     st.session_state['notification'] = ('warning', f"Quote added, but not verified: {ai_res.get('reason', 'AI check failed.')}")
                 st.rerun()
@@ -236,6 +237,9 @@ if 'notification' in st.session_state:
     msg_type, msg = st.session_state.pop('notification')
     if msg_type == 'success': st.success(msg)
     else: st.warning(msg)
+    
+if st.session_state.pop('show_balloons', False):
+    st.balloons()
 
 # --- Sidebar ---
 with st.sidebar:
@@ -278,6 +282,7 @@ def render_feed():
                     save_quote(content, ai_res.get("title", title), ai_res.get("author", author), user_data["_id"], is_verified=ai_res.get("verified", False))
                     if ai_res.get("verified"):
                         st.session_state['notification'] = ('success', "✓ Shared and AI Verified!")
+                        st.session_state['show_balloons'] = True
                     else:
                         st.session_state['notification'] = ('warning', f"Shared! Note: {ai_res.get('reason', 'AI verification failed.')}")
                     st.rerun()
