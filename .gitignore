@@ -6,6 +6,7 @@ tk.env
 # Project Tracking (as requested)
 AGENTS.md
 MEMORY.md
+CLAUDE.md
 
 # Python
 __pycache__/
