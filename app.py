@@ -26,9 +26,6 @@ def scheduled_ml_training():
         print(f"Scheduled ML training failed: {e}")
     return time.time()
 
-# Automatically train ML models weekly in the background
-scheduled_ml_training()
-
 st.set_page_config(
     page_title="Readvibe 🌿",
     page_icon="🌿",
@@ -245,6 +242,7 @@ if st.session_state.pop('show_balloons', False):
 with st.sidebar:
     st.markdown(f'<h2 style="color: #5c8d89; margin-left: 20px;">Readvibe 🌿</h2>', unsafe_allow_html=True)
     if user_data.get("email") == "phankawee.tai@gmail.com":
+        scheduled_ml_training()
         with st.expander("🛠️ Debug Tools"):
             if st.button("User: Taiman"): 
                 st.session_state.user_data_override = get_user_by_username("Taiman")

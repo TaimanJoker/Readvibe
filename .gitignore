@@ -3,9 +3,8 @@
 *.env
 tk.env
 
-# Project Tracking (as requested)
-AGENTS.md
-MEMORY.md
+# AI assistant guidance (local only)
+CLAUDE.md
 
 # Python
 __pycache__/
